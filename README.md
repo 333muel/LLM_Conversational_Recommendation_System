@@ -16,7 +16,7 @@ This is a full-stack AI-powered recommendation system that integrates graph-base
 
 This is the recommended way to run the full stack (MongoDB, Backend, and Frontend).
 
-1.  **Download Data**: Download the `data` folder from the provided link and place it in the project root.
+1.  **Download Data**: Download the latest version of zip file from [this link](https://drive.google.com/drive/folders/14jOhTDdqM-RTZ_LnWHunLiAWLhpMRef3?usp=share_link) and place the 2 folders extracted `checkpoints` and `data` in the root directory.
 2.  **Start Services**:
     ```bash
     docker-compose up -d --build
@@ -30,6 +30,44 @@ Once running:
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:8000
 - **MongoDB**: localhost:27018 (using `recommendation_demo_db`)
+
+### 2. Managing the Service
+
+Once the initial setup is complete, use these commands to manage the system:
+
+**To Start the system**:
+```bash
+docker-compose up -d
+```
+
+**To Stop the system** (keeps data preserved in volumes):
+```bash
+docker-compose stop
+```
+
+**To Restart after stopping**:
+```bash
+docker-compose start
+```
+
+**To Shut Down completely** (stops containers but keeps database data):
+```bash
+docker-compose down
+```
+
+**To View Logs** (useful for debugging):
+```bash
+# View all logs
+docker-compose logs -f
+
+# View only backend logs
+docker-compose logs -f backend
+```
+
+**To Clear Everything and Start Fresh** (Warning: deletes database data):
+```bash
+docker-compose down -v
+```
 
 ## Performance Results
 

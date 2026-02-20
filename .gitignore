@@ -11,9 +11,12 @@ node_modules/
 out/
 build/
 
-# Data (since you want users to download these manually)
+# Data (please download manually from https://drive.google.com/drive/folders/14jOhTDdqM-RTZ_LnWHunLiAWLhpMRef3?usp=share_link)
 data/
 checkpoints/
+
+# Zip data to avoid wrong uploads
+*.zip
 
 # OS
 .DS_Store
