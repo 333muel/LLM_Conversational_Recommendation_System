@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.class
+venv/
+.env
+
+# Node.js
+node_modules/
+.next/
+out/
+build/
+
+# Data (since you want users to download these manually)
+data/
+checkpoints/
+
+# OS
+.DS_Store

@@ -1,0 +1,41 @@
+services:
+  mongodb:
+    image: mongo:8.0
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGODB_URL=mongodb://mongodb:27017
+      - MONGODB_DATABASE=recommendation_demo_db
+      - RECBOLE_DATASET_PATH=/data/amazon_sentiment_200k
+      - RECBOLE_MODEL_CHECKPOINT=/checkpoints/LightGCN-Nov-09-2025_21-24-15.pth
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+    volumes:
+      - ./data:/data
+      - ./checkpoints:/checkpoints
+    depends_on:
+      - mongodb
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+
+volumes:
+  mongodb_data:
