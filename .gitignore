@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.class
 venv/
+.venv/
 .env
 
 # Node.js
@@ -14,6 +15,8 @@ build/
 # Data (please download manually from https://drive.google.com/drive/folders/14jOhTDdqM-RTZ_LnWHunLiAWLhpMRef3?usp=share_link)
 data/
 checkpoints/
+log_tensorboard/
+logs/
 
 # Zip data to avoid wrong uploads
 *.zip

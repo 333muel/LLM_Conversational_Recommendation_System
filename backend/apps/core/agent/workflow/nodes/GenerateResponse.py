@@ -1,5 +1,5 @@
 """Node for generating final AI response."""
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from apps.core.agent.workflow.nodes.BaseNode import BaseNode
 from apps.core.agent.workflow.state.RecommendationState import RecommendationState
 from apps.core.llm.Ollama import ollama_client
@@ -28,6 +28,8 @@ class GenerateResponseNode(BaseNode):
                         "rating": product.get("product_avg_rating"),
                         "price": product.get("product_price", ""),
                         "categories": product.get("product_categories", ""),
+                        "main_category": product.get("product_main_category", ""),
+                        "image": product.get("product_image_url", ""),
                         "score": rec.get("score", 0.0),
                         "rank": rec.get("rank", 0)
                     })
@@ -37,6 +39,11 @@ class GenerateResponseNode(BaseNode):
                         "item_id": item_id,
                         "title": f"Product {item_id}",
                         "description": "",
+                        "rating": 0.0,
+                        "price": "",
+                        "categories": "",
+                        "main_category": "",
+                        "image": "",
                         "score": rec.get("score", 0.0),
                         "rank": rec.get("rank", 0)
                     })
@@ -47,11 +54,24 @@ class GenerateResponseNode(BaseNode):
         self,
         user_message: str,
         product_details: List[Dict[str, Any]],
-        top_n: int = 10
+        top_n: int = 10,
+        metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Create prompt for LLM to generate recommendation response."""
         from apps.config.Setting import settings
         
+        # Build info about product sourcing
+        source_info = ""
+        if metadata:
+            source = metadata.get("source", "recommendation")
+            matched = metadata.get("matched_count", 0)
+            if source == "mixed_db_fallback":
+                source_info = f"\nNote for Assistant: We couldn't find enough items in the user's personalized recommendations that match their specific filter. I have supplemented the results with top-rated items from the entire store database."
+            elif matched > 0:
+                source_info = f"\nNote for Assistant: I found {matched} products from the user's personalized recommendations that match their request."
+            else:
+                source_info = f"\nNote for Assistant: None of the user's usual personalized recommendations matched this query, so I am showing their top general recommendations."
+
         # Separate top items (to highlight) from context items
         top_items = product_details[:top_n]
         context_items = product_details[top_n:] if len(product_details) > top_n else []
@@ -100,19 +120,18 @@ Format your response as a natural conversation, not a bullet list. Make it engag
 
         return prompt
     
-    def execute(self, state: RecommendationState) -> Dict[str, Any]:
+    async def execute(self, state: RecommendationState) -> Dict[str, Any]:
         """Generate final AI response."""
         try:
             user_message = state.get("user_message", "")
             raw_recommendations = state.get("raw_recommendations", [])
-            
-            if not raw_recommendations:
-                return {
-                    "final_response": "I apologize, but I couldn't generate any recommendations at this time. Please try again later."
-                }
+            messages = state.get("messages", [])
             
             # Get product details for all recommendations
-            product_details = self._get_product_details(raw_recommendations)
+            # If product_details are already provided (e.g. by BrowseItemNode), use them
+            product_details = state.get("product_details", [])
+            if not product_details and raw_recommendations:
+                product_details = self._get_product_details(raw_recommendations)
             
             logger.info(f"Retrieved details for {len(product_details)} products")
             
@@ -125,45 +144,59 @@ Format your response as a natural conversation, not a bullet list. Make it engag
             if top_k is None:
                 top_k = settings.recommendation_top_k
             
-            # Generate prompt with top_n items to highlight
-            prompt = self._create_recommendation_prompt(
+            # Generate context from recommendations for the AI
+            recommendations_context = self._create_recommendation_prompt(
                 user_message, 
                 product_details,
-                top_n=top_k
+                top_n=top_k,
+                metadata=state.get("product_metadata")
             )
             
-            # Generate response using Ollama
-            # Use provided model or default
+            # Prepare chat messages
+            chat_messages = []
+            
+            # Add a system prompt with context about the recommendations
+            chat_messages.append({
+                "role": "system",
+                "content": f"You are a helpful and friendly recommendation assistant. {recommendations_context}"
+            })
+            
+            # Add conversation history
+            # Filter out any existing system messages from history if we want to use our new one
+            for msg in messages:
+                if msg.get("role") != "system":
+                    chat_messages.append(msg)
+            
+            # Generate response using Ollama chat
             llm_model = model or settings.ollama_model
             logger.info(f"Generating AI response using model: {llm_model}")
             
-            # Create Ollama client with specified model
             from apps.core.llm.Ollama import OllamaClient
             client = OllamaClient(model=llm_model)
             
-            response = client.generate(
-                prompt=prompt,
-                system_prompt="You are a helpful and friendly recommendation assistant for an e-commerce platform."
-            )
+            response = await client.chat(messages=chat_messages)
             
             logger.info("AI response generated successfully")
             
-            # Return top_k product details (matching what we return to user)
-            top_k = state.get("top_k") or settings.recommendation_top_k
+            # Return top_k product details
             top_product_details = product_details[:top_k]
             
+            # The agent will handle updating the message history
             return {
                 "final_response": response,
-                "product_details": top_product_details,  # Return top_k items
-                "raw_recommendations": raw_recommendations  # Preserve raw recommendations for debug info
+                "product_details": top_product_details,
+                "raw_recommendations": raw_recommendations,
+                "messages": [{"role": "assistant", "content": response}]
             }
             
         except Exception as e:
             logger.error(f"Error in GenerateResponse node: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return {
                 "final_response": f"I encountered an error while generating recommendations: {str(e)}",
                 "product_details": [],
-                "raw_recommendations": state.get("raw_recommendations", [])  # Preserve raw recommendations even on error
+                "raw_recommendations": state.get("raw_recommendations", [])
             }
 
 

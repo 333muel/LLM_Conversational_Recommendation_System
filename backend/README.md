@@ -31,8 +31,8 @@ ai-chain/
 
 1. **Create and activate virtual environment** (recommended):
 ```bash
-# Create virtual environment
-python3 -m venv venv
+# Create virtual environment (Recommend python 3.12 for dependency stability)
+python3.12 -m venv venv
 
 # Activate it
 # On macOS/Linux:

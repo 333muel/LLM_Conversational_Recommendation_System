@@ -65,7 +65,7 @@ export default function OnboardingPage() {
                 <h1 className="text-xl m-0 tracking-wide font-extrabold">
                   Welcome to the Digital Sales Assistant
                 </h1>
-                <p className="text-[var(--muted)] text-sm leading-[1.5] mt-1.5 mb-0">
+                <p className="text-[var(--muted-foreground)] text-sm leading-[1.5] mt-1.5 mb-0">
                   You can start by browsing, or ask a needs-based question (e.g., "dry skin, fragrance-free under $20").
                 </p>
               </div>
@@ -75,7 +75,7 @@ export default function OnboardingPage() {
               <div className="w-10 h-10 rounded-[14px] bg-[rgba(45,212,191,.20)] border border-[rgba(45,212,191,.35)] flex items-center justify-center text-lg flex-shrink-0">
                 💬
               </div>
-              <p className="m-0 text-[var(--muted)] text-[13px] leading-[1.45]">
+              <p className="m-0 text-[var(--muted-foreground)] text-[13px] leading-[1.45]">
                 I can recommend products and help you refine results. You can also mark items as not relevant, save them,
                 or ask "why this item?" to see a short explanation.
               </p>
@@ -84,7 +84,7 @@ export default function OnboardingPage() {
             <div className="grid grid-cols-2 gap-[14px] mt-3.5 max-[680px]:grid-cols-1">
               <Card className="border border-[var(--line)] bg-white/98 rounded-[var(--radius)] p-3.5 shadow-[0_8px_18px_rgba(15,23,42,.05)]">
                 <h2 className="text-sm font-extrabold m-0 mb-1.5">Browse freely</h2>
-                <p className="m-0 mb-3 text-[12.5px] leading-[1.45] text-[var(--muted)]">
+                <p className="m-0 mb-3 text-[12.5px] leading-[1.45] text-[var(--muted-foreground)]">
                   See product recommendations first with minimal explanation. You can still chat anytime to refine.
                 </p>
                 <Button
@@ -97,7 +97,7 @@ export default function OnboardingPage() {
 
               <Card className="border border-[var(--line)] bg-white/98 rounded-[var(--radius)] p-3.5 shadow-[0_8px_18px_rgba(15,23,42,.05)]">
                 <h2 className="text-sm font-extrabold m-0 mb-1.5">Help me find something</h2>
-                <p className="m-0 mb-3 text-[12.5px] leading-[1.45] text-[var(--muted)]">
+                <p className="m-0 mb-3 text-[12.5px] leading-[1.45] text-[var(--muted-foreground)]">
                   Ask a question and get recommendations with short rationales. You can refine results in multiple turns.
                 </p>
                 <Button
@@ -113,7 +113,7 @@ export default function OnboardingPage() {
               <Button
                 onClick={() => router.push("/products")}
                 variant="outline"
-                className="border border-[var(--line)] bg-[rgba(241,245,249,.85)] rounded-full px-3 py-2 text-[12.5px] text-[var(--muted)] transition-colors flex items-center gap-2 hover:bg-[var(--btnHover)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.30)]"
+                className="border border-[var(--line)] bg-[rgba(241,245,249,.85)] rounded-full px-3 py-2 text-[12.5px] text-[var(--muted-foreground)] transition-colors flex items-center gap-2 hover:bg-[var(--btnHover)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.30)]"
               >
                 ← Back to store
               </Button>
@@ -123,7 +123,7 @@ export default function OnboardingPage() {
                   router.push("/products");
                 }}
                 variant="outline"
-                className="border border-[var(--line)] bg-[rgba(241,245,249,.85)] rounded-full px-3 py-2 text-[12.5px] text-[var(--muted)] transition-colors flex items-center gap-2 hover:bg-[var(--btnHover)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.30)]"
+                className="border border-[var(--line)] bg-[rgba(241,245,249,.85)] rounded-full px-3 py-2 text-[12.5px] text-[var(--muted-foreground)] transition-colors flex items-center gap-2 hover:bg-[var(--btnHover)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.30)]"
               >
                 ⟲ Reset / start over
               </Button>
@@ -134,7 +134,7 @@ export default function OnboardingPage() {
           <Card className="border border-[var(--line)] bg-white/95 rounded-[var(--radius2)] shadow-[var(--shadow)] p-4.5">
             <div className="flex items-baseline justify-between gap-3 mb-2.5">
               <h3 className="text-sm font-extrabold m-0">Suggested starters</h3>
-              <span className="text-[var(--muted)] text-xs">Click to auto-fill</span>
+              <span className="text-[var(--muted-foreground)] text-xs">Click to auto-fill</span>
             </div>
 
             <div className="flex flex-col gap-2.5 mt-2.5">
@@ -148,7 +148,7 @@ export default function OnboardingPage() {
                   className="border border-[var(--line)] bg-white/98 rounded-[var(--radius)] p-3 cursor-pointer transition-colors text-left hover:bg-[var(--panel2)] hover:border-[rgba(167,139,250,.35)]"
                 >
                   <strong className="block text-[13px] mb-1">{item.title}</strong>
-                  <p className="m-0 text-[var(--muted)] text-[12.5px] leading-[1.4]">{item.description}</p>
+                  <p className="m-0 text-[var(--muted-foreground)] text-[12.5px] leading-[1.4]">{item.description}</p>
                 </button>
               ))}
             </div>

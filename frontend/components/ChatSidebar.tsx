@@ -12,14 +12,22 @@ import Link from "next/link";
 interface ChatSidebarProps {
   initialMessage?: string;
   quickChips?: Array<{ text: string; label: string }>;
+  initialConversationId?: string;
 }
 
-export function ChatSidebar({ initialMessage, quickChips = [] }: ChatSidebarProps) {
+export function ChatSidebar({ initialMessage, quickChips = [], initialConversationId }: ChatSidebarProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
   const { userId } = useUser();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (initialConversationId) {
+      setConversationId(initialConversationId);
+    }
+  }, [initialConversationId]);
 
   useEffect(() => {
     if (initialMessage) {
@@ -60,9 +68,14 @@ export function ChatSidebar({ initialMessage, quickChips = [] }: ChatSidebarProp
     try {
       const response = await fetchRecommendations({
         message: messageText,
+        conversation_id: conversationId,
         user_id: userId,
         top_k: 5,
       });
+
+      if (response.conversation_id) {
+        setConversationId(response.conversation_id);
+      }
 
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -106,7 +119,7 @@ export function ChatSidebar({ initialMessage, quickChips = [] }: ChatSidebarProp
           </div>
           <div>
             <h2 className="text-sm font-extrabold m-0">Digital Sales Assistant</h2>
-            <p className="text-[12.5px] text-[var(--muted)] mt-0.5 m-0">
+            <p className="text-[12.5px] text-[var(--muted-foreground)] mt-0.5 m-0">
               Ask to refine results (e.g., "cheaper", "fragrance-free", "show cleansers").
             </p>
           </div>
@@ -115,8 +128,9 @@ export function ChatSidebar({ initialMessage, quickChips = [] }: ChatSidebarProp
           variant="outline"
           onClick={() => {
             setMessages(initialMessage ? [{ id: "1", role: "assistant", content: initialMessage, timestamp: new Date() }] : []);
+            setConversationId(undefined);
           }}
-          className="border border-[var(--line)] bg-[rgba(241,245,249,.85)] rounded-full px-3 py-2 text-[12.5px] text-[var(--muted)] transition-colors hover:bg-[var(--btnHover)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.30)]"
+          className="border border-[var(--line)] bg-[rgba(241,245,249,.85)] rounded-full px-3 py-2 text-[12.5px] text-[var(--muted-foreground)] transition-colors hover:bg-[var(--btnHover)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.30)]"
         >
           ⟲ Reset
         </Button>
@@ -125,7 +139,7 @@ export function ChatSidebar({ initialMessage, quickChips = [] }: ChatSidebarProp
       <div className="border border-[rgba(228,234,242,.9)] bg-white/98 rounded-[var(--radius)] overflow-hidden flex flex-col h-[560px] max-[980px]:h-[420px]">
         <div className="p-3 overflow-auto flex-1 flex flex-col gap-2.5" ref={messagesEndRef}>
           {messages.length === 0 && (
-            <div className="text-center text-[var(--muted)] py-8">
+            <div className="text-center text-[var(--muted-foreground)] py-8">
               <p className="text-[13px]">Start a conversation to get product recommendations!</p>
             </div>
           )}
@@ -162,9 +176,9 @@ export function ChatSidebar({ initialMessage, quickChips = [] }: ChatSidebarProp
             <div className="mr-auto">
               <div className="bg-[rgba(241,245,249,.85)] rounded-[14px] p-2.5 border border-[rgba(228,234,242,.9)]">
                 <div className="flex gap-1">
-                  <div className="h-1 w-1 bg-[var(--muted)] rounded-full animate-bounce" />
-                  <div className="h-1 w-1 bg-[var(--muted)] rounded-full animate-bounce [animation-delay:0.2s]" />
-                  <div className="h-1 w-1 bg-[var(--muted)] rounded-full animate-bounce [animation-delay:0.4s]" />
+                  <div className="h-1 w-1 bg-[var(--muted-foreground)] rounded-full animate-bounce" />
+                  <div className="h-1 w-1 bg-[var(--muted-foreground)] rounded-full animate-bounce [animation-delay:0.2s]" />
+                  <div className="h-1 w-1 bg-[var(--muted-foreground)] rounded-full animate-bounce [animation-delay:0.4s]" />
                 </div>
               </div>
             </div>
@@ -177,7 +191,7 @@ export function ChatSidebar({ initialMessage, quickChips = [] }: ChatSidebarProp
               <button
                 key={idx}
                 onClick={() => handleSend(chip.text)}
-                className="border border-[var(--line)] bg-[rgba(241,245,249,.9)] rounded-full px-2.5 py-1.5 text-[12.5px] text-[var(--muted)] cursor-pointer transition-colors select-none hover:bg-[var(--btnHover)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.28)]"
+                className="border border-[var(--line)] bg-[rgba(241,245,249,.9)] rounded-full px-2.5 py-1.5 text-[12.5px] text-[var(--muted-foreground)] cursor-pointer transition-colors select-none hover:bg-[var(--btnHover)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.28)]"
               >
                 {chip.label}
               </button>

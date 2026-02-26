@@ -1,4 +1,5 @@
 """MongoDB database connection and operations."""
+from datetime import datetime
 from typing import Optional, Dict, List
 from pymongo import MongoClient
 from pymongo.database import Database
@@ -71,6 +72,92 @@ class ProductRepository:
         """Get multiple products by IDs."""
         collection = cls.get_collection()
         return list(collection.find({"asin": {"$in": product_ids}}))
+
+    @classmethod
+    def filter_products(
+        cls, 
+        product_ids: List[str], 
+        category: Optional[str] = None,
+        max_price: Optional[float] = None,
+        min_rating: Optional[float] = None,
+        keywords: Optional[List[str]] = None
+    ) -> List[Dict]:
+        """
+        Filter a list of product IDs by additional constraints using Text Index.
+        """
+        collection = cls.get_collection()
+        
+        # Ensure text index exists
+        # weights priority: title > categories > description
+        collection.create_index([
+            ("product_title", "text"),
+            ("product_categories", "text"),
+            ("product_description", "text")
+        ], weights={
+            "product_title": 10,
+            "product_categories": 5,
+            "product_description": 1
+        }, name="product_text_index")
+
+        query = {"asin": {"$in": product_ids}}
+        
+        # Combine category and keywords for text search
+        search_terms = []
+        if category:
+            search_terms.append(category)
+        if keywords:
+            search_terms.extend(keywords)
+            
+        if search_terms:
+            query["$text"] = {"$search": " ".join(search_terms)}
+
+        if min_rating is not None:
+            query["product_avg_rating"] = {"$gte": min_rating}
+            
+        # If search terms exist, sort by text score and filter by threshold
+        if search_terms:
+            results = list(collection.find(
+                query,
+                {"score": {"$meta": "textScore"}}
+            ).sort([("score", {"$meta": "textScore"})]))
+            
+            # Lower limit threshold to avoid irrelevant matches
+            # A score of 1.0 is a reasonable starting point for "relevant enough"
+            results = [p for p in results if p.get("score", 0) >= 1.0]
+        else:
+            results = list(collection.find(query))
+        
+        # Post-process price filtering in Python because it's a string in DB
+        if max_price is not None:
+            filtered_results = []
+            for p in results:
+                try:
+                    price_str = p.get("product_price", "0").replace("$", "").strip()
+                    if float(price_str) <= max_price:
+                        filtered_results.append(p)
+                except (ValueError, TypeError):
+                    filtered_results.append(p)
+            return filtered_results
+            
+        return results
+
+    @classmethod
+    def get_top_rated_by_category(cls, category: str, limit: int = 10) -> List[Dict]:
+        """Get best rated products in a category using text index with threshold."""
+        collection = cls.get_collection()
+        
+        # Text search with score threshold
+        results = list(collection.find(
+            {"$text": {"$search": category}},
+            {"score": {"$meta": "textScore"}}
+        ).sort([
+            ("score", {"$meta": "textScore"}),
+            ("product_avg_rating", -1)
+        ]))
+        
+        # Apply threshold and limit
+        relevant_results = [p for p in results if p.get("score", 0) >= 1.0]
+        return relevant_results[:limit]
     
     @classmethod
     def get_product_description(cls, product_id: str) -> Optional[str]:
@@ -132,4 +219,42 @@ class ProductRepository:
                     except Exception:
                         skipped += 1
                 logger.info(f"Inserted {inserted} products, skipped {skipped} duplicates")
+
+
+class ConversationRepository:
+    """Repository for conversation history with volatile storage (TTL)."""
+    
+    COLLECTION_NAME = "conversations"
+    TTL_SECONDS = 3600 * 24  # 24 hours
+    
+    @classmethod
+    def get_collection(cls) -> Collection:
+        """Get conversations collection and ensure TTL index."""
+        collection = MongoDB.get_collection(cls.COLLECTION_NAME)
+        # Create TTL index on 'updated_at' field
+        collection.create_index("updated_at", expireAfterSeconds=cls.TTL_SECONDS)
+        collection.create_index("conversation_id", unique=True)
+        return collection
+    
+    @classmethod
+    def get_history(cls, conversation_id: str) -> List[Dict]:
+        """Get conversation history by ID."""
+        collection = cls.get_collection()
+        doc = collection.find_one({"conversation_id": conversation_id})
+        return doc.get("messages", []) if doc else []
+    
+    @classmethod
+    def save_history(cls, conversation_id: str, messages: List[Dict]) -> None:
+        """Save conversation history."""
+        collection = cls.get_collection()
+        collection.update_one(
+            {"conversation_id": conversation_id},
+            {
+                "$set": {
+                    "messages": messages,
+                    "updated_at": datetime.utcnow()
+                }
+            },
+            upsert=True
+        )
 

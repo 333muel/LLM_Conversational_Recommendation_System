@@ -1,0 +1,58 @@
+import json
+from typing import Dict, Any, Optional
+from apps.core.llm.Ollama import OllamaClient
+from apps.config.Setting import settings
+from apps.config.Tracing import get_logger
+
+logger = get_logger(__name__)
+
+class QueryProcessor:
+    """Utility to translate natural language queries into structured constraints."""
+    
+    SYSTEM_PROMPT = """You are a query parsing assistant for a beauty e-commerce store. 
+Your task is to extract structured constraints from a user's natural language request.
+
+Output ONLY a valid JSON object with the following optional keys:
+- "category": (string) The specific product category (e.g., "Serums", "Cleansers", "Makeup", "Face", "Makeup, Face, Concealers & Neutralizers"). Use the most specific category mentioned.
+- "max_price": (float) Maximum budget if mentioned.
+- "min_rating": (float) Minimum rating if mentioned.
+- "keywords": (list of strings) Key features or ingredients mentioned (e.g., "fragrance-free", "sensitive skin", "vitamin c").
+- "intent": (string) Short summary of what the user is looking for.
+
+If a constraint is not mentioned, do not include it in the JSON.
+Example: "Find me a serum for sensitive skin under $30"
+Output: {"category": "Serums", "max_price": 30.0, "keywords": ["sensitive skin"], "intent": "sensitive skin serum"}
+
+Example: "Show me some best rated cleansers"
+Output: {"category": "Cleansers", "min_rating": 4.5, "intent": "highly rated cleansers"}
+
+Return ONLY the JSON object. Do not include any other text."""
+
+    def __init__(self, model: Optional[str] = None):
+        self.client = OllamaClient(model=model or settings.ollama_model)
+
+    async def process(self, user_message: str) -> Dict[str, Any]:
+        """Process user message into structured constraints."""
+        try:
+            logger.info(f"Processing query for constraints: {user_message}")
+            response = await self.client.generate(
+                prompt=f"User request: \"{user_message}\"",
+                system_prompt=self.SYSTEM_PROMPT
+            )
+            
+            # Clean response to ensure it's just JSON
+            cleaned_response = response.strip()
+            if "```json" in cleaned_response:
+                cleaned_response = cleaned_response.split("```json")[1].split("```")[0].strip()
+            elif "```" in cleaned_response:
+                cleaned_response = cleaned_response.split("```")[1].split("```")[0].strip()
+            
+            # Parse JSON
+            constraints = json.loads(cleaned_response)
+            logger.info(f"Extracted constraints: {constraints}")
+            return constraints
+            
+        except Exception as e:
+            logger.error(f"Error processing query with LLM: {e}")
+            # Return empty constraints on error
+            return {"intent": "general discovery"}

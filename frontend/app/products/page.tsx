@@ -16,6 +16,7 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [showAllCategories, setShowAllCategories] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -69,7 +70,7 @@ export default function ProductsPage() {
             <h1 className="text-[22px] font-extrabold tracking-wide mb-1.5">
               Discover skincare, haircare, and cosmetics
             </h1>
-            <p className="text-[var(--muted)] text-sm leading-[1.45] m-0">
+            <p className="text-[var(--muted-foreground)] text-sm leading-[1.45] m-0">
               Browse products freely, or use the Digital Sales Assistant for needs-based discovery and refinement.
             </p>
           </div>
@@ -88,7 +89,7 @@ export default function ProductsPage() {
           >
             All
           </button>
-          {categories.map((cat) => (
+          {(showAllCategories ? categories : categories.slice(0, 10)).map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
@@ -102,16 +103,24 @@ export default function ProductsPage() {
               {cat}
             </button>
           ))}
+          {categories.length > 10 && (
+            <button
+              onClick={() => setShowAllCategories(!showAllCategories)}
+              className="px-3 py-2 rounded-full border border-dashed border-[var(--line)] text-[13px] text-[var(--muted-foreground)] cursor-pointer transition-colors hover:bg-[var(--panel2)] hover:border-[rgba(45,212,191,.35)]"
+            >
+              {showAllCategories ? "Show less" : `+${categories.length - 10} more`}
+            </button>
+          )}
         </div>
 
         <div className="flex items-baseline justify-between gap-3 mt-4 mb-2.5">
           <h2 className="text-base m-0 tracking-wide font-semibold">Featured today</h2>
           <div className="flex items-center gap-2">
-            <span className="text-[var(--muted)] text-[13px]">Browse, then ask the assistant to refine.</span>
+            <span className="text-[var(--muted-foreground)] text-[13px]">Browse, then ask the assistant to refine.</span>
             <Button
               onClick={() => router.push("/onboarding")}
               variant="outline"
-              className="border border-[var(--line)] bg-white/90 px-3 py-2 rounded-full text-[13px] text-[var(--muted)] transition-colors hover:bg-[var(--panel2)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.35)]"
+              className="border border-[var(--line)] bg-white/90 px-3 py-2 rounded-full text-[13px] text-[var(--muted-foreground)] transition-colors hover:bg-[var(--panel2)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.35)]"
             >
               Get Started
             </Button>
@@ -121,7 +130,7 @@ export default function ProductsPage() {
         {loading && (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            <p className="mt-4 text-[var(--muted)]">Loading products...</p>
+            <p className="mt-4 text-[var(--muted-foreground)]">Loading products...</p>
           </div>
         )}
 
@@ -135,7 +144,7 @@ export default function ProductsPage() {
           <>
             {products.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-[var(--muted)]">No products found.</p>
+                <p className="text-[var(--muted-foreground)]">No products found.</p>
               </div>
             ) : (
               <div className="grid grid-cols-4 gap-4 max-[1020px]:grid-cols-3 max-[720px]:grid-cols-2" aria-label="Product grid">
@@ -147,8 +156,6 @@ export default function ProductsPage() {
           </>
         )}
       </main>
-
-      <Chatbot />
     </div>
   );
 }

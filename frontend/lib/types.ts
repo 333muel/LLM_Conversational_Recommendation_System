@@ -33,12 +33,15 @@ export interface Recommendation {
   rating: number;
   price: string;
   categories: string;
+  main_category?: string;
+  image?: string;
   score: number;
   rank: number;
 }
 
 export interface RecommendationResponse {
   response: string;
+  conversation_id: string;
   recommendations: Recommendation[];
   user_id: string;
   success: boolean;
@@ -53,10 +56,65 @@ export interface RecommendationResponse {
 
 export interface RecommendationRequest {
   message: string;
+  conversation_id?: string;
   user_id?: string;
   top_k?: number;
   model?: string;
   algorithm?: string;
+}
+
+export interface BrowseRequest {
+  message: string;
+  conversation_id?: string;
+  user_id?: string;
+  algorithm?: string;
+}
+
+export interface BrowseResponse {
+  response: string;
+  conversation_id: string;
+  products: Recommendation[];
+  constraints: Record<string, any>;
+  metadata: Record<string, any>;
+  success: boolean;
+  error?: string;
+}
+
+export interface ExtractRequest {
+  message: string;
+  user_id?: string;
+}
+
+export interface ExtractResponse {
+  constraints: Record<string, any>;
+  intent: string;
+  success: boolean;
+}
+
+export interface FilterRequest {
+  constraints: Record<string, any>;
+  user_id?: string;
+  algorithm?: string;
+}
+
+export interface FilterResponse {
+  products: Recommendation[];
+  metadata: Record<string, any>;
+  success: boolean;
+}
+
+export interface RespondRequest {
+  message: string;
+  conversation_id: string;
+  user_id: string;
+  product_details: any[];
+  metadata?: Record<string, any>;
+}
+
+export interface RespondResponse {
+  response: string;
+  conversation_id: string;
+  success: boolean;
 }
 
 export interface ChatMessage {

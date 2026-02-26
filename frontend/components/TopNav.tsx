@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/contexts/UserContext";
+import { useChat } from "@/contexts/ChatContext";
 import { Button } from "@/components/ui/button";
 
 interface TopNavProps {
@@ -13,15 +14,16 @@ interface TopNavProps {
 
 export function TopNav({ showAskRow = false, onAskSubmit }: TopNavProps) {
   const { userId, logout, isAuthenticated } = useUser();
+  const { openChat } = useChat();
   const router = useRouter();
   const [askInput, setAskInput] = useState("");
 
   const handleAskSubmit = () => {
-    if (askInput.trim() && onAskSubmit) {
-      onAskSubmit(askInput.trim());
+    if (askInput.trim()) {
+      openChat(askInput.trim());
       setAskInput("");
-    } else if (askInput.trim()) {
-      router.push(`/consult?q=${encodeURIComponent(askInput.trim())}`);
+    } else {
+      openChat();
     }
   };
 
@@ -88,7 +90,13 @@ export function TopNav({ showAskRow = false, onAskSubmit }: TopNavProps) {
                 ✨ Ask assistant
               </Button>
               <Button
-                onClick={() => router.push("/browse")}
+                onClick={() => {
+                  if (askInput.trim()) {
+                    router.push(`/browse?q=${encodeURIComponent(askInput.trim())}`);
+                  } else {
+                    router.push("/browse");
+                  }
+                }}
                 variant="outline"
                 className="bg-[var(--btn)] border border-[var(--line)] px-3 py-2.5 rounded-[14px] cursor-pointer font-semibold text-[13px] transition-colors hover:bg-[var(--btnHover)] hover:border-[rgba(45,212,191,.35)] whitespace-nowrap"
               >

@@ -9,7 +9,7 @@ router = APIRouter(prefix="/api/algorithms", tags=["algorithms"])
 
 
 @router.get("/available")
-async def get_available_algorithms():
+def get_available_algorithms():
     """
     Get list of available algorithms based on checkpoint files.
     

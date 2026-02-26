@@ -52,7 +52,7 @@
   --panel: #ffffff;
   --panel2: #f1f5f9;
   --text: #182230;
-  --muted: #1e293b;
+  --text-muted: #64748b;
   --line: #e4eaf2;
   
   --brand: #2dd4bf;
@@ -85,7 +85,7 @@
   --secondary: var(--panel2);
   --secondary-foreground: var(--text);
   --muted: var(--panel2);
-  --muted-foreground: #1e293b;
+  --muted-foreground: var(--text-muted);
   --accent: var(--panel2);
   --accent-foreground: var(--text);
   --destructive: var(--danger);

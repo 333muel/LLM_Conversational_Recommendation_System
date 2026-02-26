@@ -1,6 +1,6 @@
 """Ollama LLM client integration."""
 from typing import Optional, List, Dict
-import requests
+import httpx
 from apps.config.Setting import settings
 from apps.config.Tracing import get_logger
 
@@ -14,8 +14,8 @@ class OllamaClient:
         self.base_url = base_url or settings.ollama_base_url
         self.model = model or settings.ollama_model
     
-    def generate(self, prompt: str, system_prompt: Optional[str] = None, **kwargs) -> str:
-        """Generate text using Ollama."""
+    async def generate(self, prompt: str, system_prompt: Optional[str] = None, **kwargs) -> str:
+        """Generate text using Ollama (Async)."""
         try:
             payload = {
                 "model": self.model,
@@ -27,21 +27,21 @@ class OllamaClient:
             if system_prompt:
                 payload["system"] = system_prompt
             
-            response = requests.post(
-                f"{self.base_url}/api/generate",
-                json=payload,
-                timeout=120
-            )
-            response.raise_for_status()
-            
-            result = response.json()
-            return result.get("response", "")
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.post(
+                    f"{self.base_url}/api/generate",
+                    json=payload
+                )
+                response.raise_for_status()
+                
+                result = response.json()
+                return result.get("response", "")
         except Exception as e:
             logger.error(f"Error generating text with Ollama: {e}")
             raise
     
-    def chat(self, messages: List[Dict[str, str]], **kwargs) -> str:
-        """Chat with Ollama using message format."""
+    async def chat(self, messages: List[Dict[str, str]], **kwargs) -> str:
+        """Chat with Ollama using message format (Async)."""
         try:
             payload = {
                 "model": self.model,
@@ -50,15 +50,15 @@ class OllamaClient:
                 **kwargs
             }
             
-            response = requests.post(
-                f"{self.base_url}/api/chat",
-                json=payload,
-                timeout=120
-            )
-            response.raise_for_status()
-            
-            result = response.json()
-            return result.get("message", {}).get("content", "")
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.post(
+                    f"{self.base_url}/api/chat",
+                    json=payload
+                )
+                response.raise_for_status()
+                
+                result = response.json()
+                return result.get("message", {}).get("content", "")
         except Exception as e:
             logger.error(f"Error chatting with Ollama: {e}")
             raise

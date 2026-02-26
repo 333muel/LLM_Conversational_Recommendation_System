@@ -20,7 +20,7 @@ export default function Home() {
     <div className="flex min-h-screen items-center justify-center">
       <div className="text-center">
         <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        <p className="mt-4 text-[var(--muted)]">Redirecting...</p>
+        <p className="mt-4 text-[var(--muted-foreground)]">Redirecting...</p>
       </div>
     </div>
   );

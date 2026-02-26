@@ -36,6 +36,7 @@ function ConsultContent() {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [conversationId, setConversationId] = useState<string | undefined>(undefined);
 
   const loadRecommendations = async () => {
     try {
@@ -44,11 +45,15 @@ function ConsultContent() {
 
       const response = await fetchRecommendations({
         message: query,
+        conversation_id: conversationId,
         user_id: userId,
         top_k: 10,
       });
 
       setRecommendations(response.recommendations);
+      if (response.conversation_id) {
+        setConversationId(response.conversation_id);
+      }
       
       // Fetch product details for recommendations
       if (response.recommendations.length > 0) {
@@ -89,7 +94,7 @@ function ConsultContent() {
             <div className="flex items-start justify-between gap-3 mb-3.5">
               <div>
                 <h1 className="text-lg m-0 tracking-wide font-extrabold">Consult mode — Recommendations</h1>
-                <p className="text-[var(--muted)] text-[13px] leading-[1.5] mt-1.5 mb-0">
+                <p className="text-[var(--muted-foreground)] text-[13px] leading-[1.5] mt-1.5 mb-0">
                   Results include short rationales. Refine by replying in the chat.
                 </p>
               </div>
@@ -97,14 +102,14 @@ function ConsultContent() {
                 <Button
                   onClick={() => router.push("/onboarding")}
                   variant="outline"
-                  className="border border-[var(--line)] bg-[rgba(241,245,249,.85)] rounded-full px-3 py-2 text-[12.5px] text-[var(--muted)] transition-colors flex items-center gap-2 select-none hover:bg-[var(--btnHover)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.30)]"
+                  className="border border-[var(--line)] bg-[rgba(241,245,249,.85)] rounded-full px-3 py-2 text-[12.5px] text-[var(--muted-foreground)] transition-colors flex items-center gap-2 select-none hover:bg-[var(--btnHover)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.30)]"
                 >
                   ✎ New query
                 </Button>
                 <Button
                   onClick={() => router.push("/products")}
                   variant="outline"
-                  className="border border-[var(--line)] bg-[rgba(241,245,249,.85)] rounded-full px-3 py-2 text-[12.5px] text-[var(--muted)] transition-colors flex items-center gap-2 select-none hover:bg-[var(--btnHover)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.30)]"
+                  className="border border-[var(--line)] bg-[rgba(241,245,249,.85)] rounded-full px-3 py-2 text-[12.5px] text-[var(--muted-foreground)] transition-colors flex items-center gap-2 select-none hover:bg-[var(--btnHover)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.30)]"
                 >
                   ⟲ Reset
                 </Button>
@@ -112,7 +117,7 @@ function ConsultContent() {
             </div>
 
             <Card className="border border-[rgba(228,234,242,.95)] bg-[rgba(241,245,249,.65)] rounded-[var(--radius)] p-3 mb-3.5">
-              <p className="text-xs text-[var(--muted)] m-0 mb-1.5">Your request</p>
+              <p className="text-xs text-[var(--muted-foreground)] m-0 mb-1.5">Your request</p>
               <p className="m-0 text-[13.5px] leading-[1.45] font-semibold text-[rgba(24,34,48,.92)]">
                 {query}
               </p>
@@ -121,7 +126,7 @@ function ConsultContent() {
                   <button
                     key={idx}
                     onClick={() => router.push(`/consult?q=${encodeURIComponent(chip.text)}`)}
-                    className="border border-[var(--line)] bg-white/90 rounded-full px-2.5 py-1.5 text-[12.5px] text-[var(--muted)] cursor-pointer transition-colors select-none hover:bg-[var(--btnHover)] hover:text-[var(--text)] hover:border-[rgba(167,139,250,.28)]"
+                    className="border border-[var(--line)] bg-white/90 rounded-full px-2.5 py-1.5 text-[12.5px] text-[var(--muted-foreground)] cursor-pointer transition-colors select-none hover:bg-[var(--btnHover)] hover:text-[var(--text)] hover:border-[rgba(167,139,250,.28)]"
                   >
                     {chip.label}
                   </button>
@@ -132,7 +137,7 @@ function ConsultContent() {
             {loading && (
               <div className="text-center py-12">
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                <p className="mt-4 text-[var(--muted)]">Loading recommendations...</p>
+                <p className="mt-4 text-[var(--muted-foreground)]">Loading recommendations...</p>
               </div>
             )}
 
@@ -145,7 +150,7 @@ function ConsultContent() {
             {!loading && !error && (
               <>
                 {products.length === 0 ? (
-                  <div className="text-[var(--muted)] text-[13.5px] leading-[1.5]">
+                  <div className="text-[var(--muted-foreground)] text-[13.5px] leading-[1.5]">
                     No items to show. Try resetting or ask the assistant to relax constraints.
                   </div>
                 ) : (
@@ -173,7 +178,7 @@ function ConsultContent() {
                               {product.product_title || "Untitled Product"}
                             </h3>
                             
-                            <div className="flex items-center justify-between gap-2.5 flex-wrap text-[var(--muted)] text-[12.5px]">
+                            <div className="flex items-center justify-between gap-2.5 flex-wrap text-[var(--muted-foreground)] text-[12.5px]">
                               <span className="font-extrabold text-[rgba(24,34,48,.85)]">
                                 {product.product_price ? `$${product.product_price}` : "—"}
                               </span>
@@ -194,7 +199,7 @@ function ConsultContent() {
                             <div className="flex gap-2 flex-wrap mt-1">
                               <Button
                                 variant="outline"
-                                className="border border-[var(--line)] bg-[rgba(241,245,249,.9)] px-2.5 py-1.5 rounded-full text-[12.5px] text-[var(--muted)] transition-colors hover:bg-[var(--btnHover)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.30)]"
+                                className="border border-[var(--line)] bg-[rgba(241,245,249,.9)] px-2.5 py-1.5 rounded-full text-[12.5px] text-[var(--muted-foreground)] transition-colors hover:bg-[var(--btnHover)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.30)]"
                               >
                                 ⭐ Save
                               </Button>
@@ -205,13 +210,13 @@ function ConsultContent() {
                               </Button>
                               <Button
                                 variant="outline"
-                                className="border border-[var(--line)] bg-[rgba(241,245,249,.9)] px-2.5 py-1.5 rounded-full text-[12.5px] text-[var(--muted)] transition-colors hover:bg-[var(--btnHover)] hover:text-[rgba(185,28,28,.95)] hover:border-[rgba(239,68,68,.25)]"
+                                className="border border-[var(--line)] bg-[rgba(241,245,249,.9)] px-2.5 py-1.5 rounded-full text-[12.5px] text-[var(--muted-foreground)] transition-colors hover:bg-[var(--btnHover)] hover:text-[rgba(185,28,28,.95)] hover:border-[rgba(239,68,68,.25)]"
                               >
                                 ❌ Not relevant
                               </Button>
                               <Button
                                 variant="outline"
-                                className="border border-[var(--line)] bg-[rgba(241,245,249,.9)] px-2.5 py-1.5 rounded-full text-[12.5px] text-[var(--muted)] transition-colors hover:bg-[var(--btnHover)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.30)]"
+                                className="border border-[var(--line)] bg-[rgba(241,245,249,.9)] px-2.5 py-1.5 rounded-full text-[12.5px] text-[var(--muted-foreground)] transition-colors hover:bg-[var(--btnHover)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.30)]"
                               >
                                 Why this?
                               </Button>
@@ -230,6 +235,7 @@ function ConsultContent() {
           <ChatSidebar
             initialMessage={`Thanks — here are a few options, each with a short rationale. You can refine by budget, ingredients, or product type.`}
             quickChips={QUICK_CHIPS}
+            initialConversationId={conversationId}
           />
         </div>
       </main>

@@ -93,7 +93,7 @@ def deduplicate_by_parent_asin(products: list) -> list:
 
 @router.get("")
 @router.get("/")
-async def get_products(
+def get_products(
     limit: int = Query(20, ge=1, le=100, description="Number of products to return"),
     skip: int = Query(0, ge=0, description="Number of products to skip"),
     category: Optional[str] = Query(None, description="Filter by main category")
@@ -159,7 +159,7 @@ async def get_products(
 
 
 @router.get("/{asin}")
-async def get_product(asin: str) -> dict:
+def get_product(asin: str) -> dict:
     """
     Get a single product by ASIN.
     
@@ -189,7 +189,7 @@ async def get_product(asin: str) -> dict:
 
 
 @router.get("/categories/list")
-async def get_categories() -> dict:
+def get_categories() -> dict:
     """
     Get list of available product categories.
     

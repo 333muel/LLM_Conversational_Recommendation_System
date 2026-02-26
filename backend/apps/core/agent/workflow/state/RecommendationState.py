@@ -1,5 +1,5 @@
 """State management for recommendation workflow."""
-from typing import List, Dict, Optional, TypedDict, Annotated
+from typing import List, Dict, Optional, TypedDict, Annotated, Any
 from langgraph.graph.message import add_messages
 
 
@@ -8,8 +8,8 @@ class RecommendationState(TypedDict):
     # User input
     user_message: str
     
-    # Processed query
-    query: Optional[str]
+    # Processed query constraints
+    constraints: Optional[Dict[str, Any]]
     
     # User ID for recommendations (demo user)
     user_id: Optional[str]
@@ -19,11 +19,14 @@ class RecommendationState(TypedDict):
     algorithm: Optional[str]
     model: Optional[str]
     
-    # Raw recommendations from RecBole
+    # Raw recommendations from RecBole (candidates)
     raw_recommendations: List[Dict[str, any]]
     
     # Product details for recommended items
     product_details: List[Dict[str, any]]
+    
+    # Metadata about product sourcing
+    product_metadata: Optional[Dict[str, Any]]
     
     # Final AI-generated recommendation response
     final_response: Optional[str]

@@ -14,17 +14,32 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MessageCircle, Send, X, Star } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
+import { useChat } from "@/contexts/ChatContext";
 import { fetchRecommendations } from "@/lib/api";
 import { ChatMessage, Recommendation } from "@/lib/types";
 import Link from "next/link";
 
 export function Chatbot() {
-  const [isOpen, setIsOpen] = useState(false);
+  const { isOpen, setIsOpen, initialMessage, setInitialMessage } = useChat();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const { userId } = useUser();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Handle initial message from context
+  useEffect(() => {
+    if (initialMessage && isOpen) {
+      setInput(initialMessage);
+      setInitialMessage(null);
+      // We don't auto-send because the user might want to edit it
+      // or we can auto-send if that's preferred.
+      // Given the user query "linked to this chat dialogue", 
+      // let's auto-send if it's coming from the search bar.
+      handleSend(initialMessage);
+    }
+  }, [initialMessage, isOpen]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -34,26 +49,33 @@ export function Chatbot() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || !userId) return;
+  const handleSend = async (overrideInput?: string) => {
+    const messageText = overrideInput || input.trim();
+    if (!messageText || !userId) return;
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
-      content: input.trim(),
+      content: messageText,
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    setInput("");
+    if (!overrideInput) setInput("");
     setIsLoading(true);
 
     try {
       const response = await fetchRecommendations({
-        message: input.trim(),
+        message: messageText,
+        conversation_id: conversationId,
         user_id: userId,
         top_k: 5,
       });
+
+      // Update conversation ID for subsequent messages
+      if (response.conversation_id) {
+        setConversationId(response.conversation_id);
+      }
 
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -104,7 +126,7 @@ export function Chatbot() {
             <div className="flex items-center justify-between gap-2.5">
               <div>
                 <DrawerTitle className="text-sm font-extrabold">Digital Sales Assistant</DrawerTitle>
-                <DrawerDescription className="text-[13px] text-[var(--muted)] leading-[1.45] mt-0.5">
+                <DrawerDescription className="text-[13px] text-[var(--muted-foreground)] leading-[1.45] mt-0.5">
                   Ask me about beauty products and I'll help you find what you're looking for!
                 </DrawerDescription>
               </div>
@@ -121,7 +143,7 @@ export function Chatbot() {
 
           <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2.5">
             {messages.length === 0 && (
-              <div className="text-center text-[var(--muted)] py-8">
+              <div className="text-center text-[var(--muted-foreground)] py-8">
                 <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p className="text-[13px]">Start a conversation to get product recommendations!</p>
               </div>
@@ -145,6 +167,7 @@ export function Chatbot() {
                         key={rec.item_id}
                         href={`/products/${rec.item_id}`}
                         className="block"
+                        onClick={() => setIsOpen(false)}
                       >
                         <Card className="p-2 hover:bg-accent transition-colors border border-[var(--line)]">
                           <div className="flex items-start justify-between gap-2">
@@ -178,9 +201,9 @@ export function Chatbot() {
               <div className="mr-auto">
                 <div className="bg-[rgba(241,245,249,.85)] rounded-[14px] p-2.5 border border-[rgba(228,234,242,.9)]">
                   <div className="flex gap-1">
-                    <div className="h-1 w-1 bg-[var(--muted)] rounded-full animate-bounce" />
-                    <div className="h-1 w-1 bg-[var(--muted)] rounded-full animate-bounce [animation-delay:0.2s]" />
-                    <div className="h-1 w-1 bg-[var(--muted)] rounded-full animate-bounce [animation-delay:0.4s]" />
+                    <div className="h-1 w-1 bg-[var(--muted-foreground)] rounded-full animate-bounce" />
+                    <div className="h-1 w-1 bg-[var(--muted-foreground)] rounded-full animate-bounce [animation-delay:0.2s]" />
+                    <div className="h-1 w-1 bg-[var(--muted-foreground)] rounded-full animate-bounce [animation-delay:0.4s]" />
                   </div>
                 </div>
               </div>
