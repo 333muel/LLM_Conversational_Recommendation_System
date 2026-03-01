@@ -16,17 +16,25 @@ This is a full-stack AI-powered recommendation system that integrates graph-base
 
 This is the recommended way to run the full stack (MongoDB, Backend, and Frontend).
 
-1.  **Download Data**: Download the latest version of zip file from [this link](https://drive.google.com/drive/folders/14jOhTDdqM-RTZ_LnWHunLiAWLhpMRef3?usp=share_link) and place the 2 folders extracted `checkpoints` and `data` in the root directory.
-2. **Start Ollama Server**: Download Ollama from the [official website](https://ollama.com/download) and download the qwen3:latest model
+1.  **Clone the project**: 
+    ```bash
+    git clone https://github.com/333muel/FYP_Conversational_Recommendation_System
+    ```
+2.  **Download Data**: Download the latest version of zip file from [this link](https://drive.google.com/drive/folders/14jOhTDdqM-RTZ_LnWHunLiAWLhpMRef3?usp=share_link) and place the 2 folders extracted `checkpoints` and `data` in the root directory.
+3. **Start Ollama Server**: Download Ollama from the [official website](https://ollama.com/download) and download the qwen3:latest model
     ```bash
     # After downloading ollama
     ollama pull qwen3:latest
     ```
-3.  **Start Services**:
+4. **Start Docker Server**:
+    ```bash
+    docker pull mongo:8.0
+    ```
+4.  **Start Services**:
     ```bash
     docker-compose up -d --build
     ```
-4.  **Initialize Database** (run once):
+5.  **Initialize Database** (run once):
     ```bash
     docker-compose exec backend python scripts/initialize_db.py
     ```

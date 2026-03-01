@@ -223,7 +223,7 @@ export function Chatbot() {
                 className="flex-1 border border-[rgba(228,234,242,.95)] outline-none text-[13.5px] px-3 py-2.5 rounded-[14px] bg-[rgba(241,245,249,.55)] text-[var(--text)] focus:bg-white/98 focus:border-[rgba(167,139,250,.35)] focus:shadow-[0_0_0_4px_rgba(167,139,250,.10)] placeholder:text-[rgba(91,103,119,.75)]"
               />
               <Button
-                onClick={handleSend}
+                onClick={() => handleSend()}
                 disabled={isLoading || !input.trim()}
                 className="bg-[rgba(167,139,250,.14)] border border-[rgba(167,139,250,.35)] rounded-[14px] px-3 py-2.5 cursor-pointer font-extrabold text-[13px] transition-colors whitespace-nowrap select-none hover:bg-[rgba(167,139,250,.20)] disabled:opacity-50"
               >
