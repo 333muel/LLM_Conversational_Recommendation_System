@@ -9,8 +9,8 @@ def route_after_recommend(state: RecommendationState) -> Literal["generate_respo
     return "generate_response"
 
 
-def route_after_generate(state: RecommendationState) -> Literal["end"]:
+def route_after_generate(state: RecommendationState) -> Literal["update_user_profile"]:
     """Route after generate response node."""
-    # End the workflow
-    return "end"
+    # Go to update user profile node after generating response
+    return "update_user_profile"
 

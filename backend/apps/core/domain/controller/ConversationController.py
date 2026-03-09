@@ -1,11 +1,14 @@
 """API controller for conversation/recommendation endpoints."""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from apps.core.domain.model.ConversationModel import (
     RecommendationRequest, RecommendationResponse, 
     BrowseRequest, BrowseResponse,
     ExtractRequest, ExtractResponse,
     FilterRequest, FilterResponse,
-    RespondRequest, RespondResponse
+    RespondRequest, RespondResponse,
+    SelectItemRequest, SelectItemResponse,
+    FeedbackRequest, FeedbackResponse,
+    ExplainRequest, ExplainResponse
 )
 from apps.core.agent.AgentResponse import get_recommendation_agent
 from apps.config.Tracing import get_logger
@@ -16,7 +19,7 @@ router = APIRouter(prefix="/api/conversation", tags=["conversation"])
 
 
 @router.post("/recommend", response_model=RecommendationResponse)
-async def get_recommendations(request: RecommendationRequest) -> RecommendationResponse:
+async def get_recommendations(request: RecommendationRequest, background_tasks: BackgroundTasks) -> RecommendationResponse:
     """
     Get product recommendations based on user message.
     
@@ -44,7 +47,8 @@ async def get_recommendations(request: RecommendationRequest) -> RecommendationR
             user_id=request.user_id,
             top_k=request.top_k,
             model=request.model,
-            algorithm=request.algorithm
+            algorithm=request.algorithm,
+            background_tasks=background_tasks
         )
         
         # Convert to response model
@@ -61,7 +65,7 @@ async def get_recommendations(request: RecommendationRequest) -> RecommendationR
 
 
 @router.post("/browse", response_model=BrowseResponse)
-async def get_browse_discovery(request: BrowseRequest) -> BrowseResponse:
+async def get_browse_discovery(request: BrowseRequest, background_tasks: BackgroundTasks) -> BrowseResponse:
     """
     Enhanced browse discovery with AI query processing.
     """
@@ -73,13 +77,61 @@ async def get_browse_discovery(request: BrowseRequest) -> BrowseResponse:
             user_message=request.message,
             conversation_id=request.conversation_id,
             user_id=request.user_id,
-            algorithm=request.algorithm
+            algorithm=request.algorithm,
+            background_tasks=background_tasks
         )
         
         return BrowseResponse(**result)
         
     except Exception as e:
         logger.error(f"Error in browse endpoint: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/baseline", response_model=BrowseResponse)
+async def get_baseline_recommendations(request: RecommendationRequest, background_tasks: BackgroundTasks) -> BrowseResponse:
+    """
+    Get product recommendations based on user message, skipping RecBole (Baseline).
+    
+    Args:
+        request: Recommendation request with user message and optional parameters:
+            - message: User's query
+            - conversation_id: Optional conversation ID for multi-turn
+            - user_id: Optional user ID (uses demo user if not provided)
+            - top_k: Optional number of recommendations (default: 20)
+            - model: Optional LLM model name (default: qwen3:latest)
+        
+    Returns:
+        BrowseResponse with AI-generated text and product recommendations from MongoDB directly.
+    """
+    try:
+        logger.info(f"Received baseline recommendation request: {request.message[:100]}")
+        
+        # Get agent and process request
+        agent = get_recommendation_agent()
+        result = await agent.process_baseline(
+            user_message=request.message,
+            conversation_id=request.conversation_id,
+            user_id=request.user_id,
+            top_k=request.top_k,
+            model=request.model,
+            background_tasks=background_tasks
+        )
+        
+        # In process_baseline, we returned "recommendations", but BrowseResponse expects "products"
+        if "recommendations" in result and "products" not in result:
+            result["products"] = result.pop("recommendations")
+            
+        # Convert to response model
+        response = BrowseResponse(**result)
+        
+        logger.info(f"Baseline recommendation generated successfully for conv {response.conversation_id}: {len(response.products)} items")
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error in baseline endpoint: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -109,7 +161,7 @@ async def filter_products(request: FilterRequest) -> FilterResponse:
 
 
 @router.post("/respond", response_model=RespondResponse)
-async def generate_response(request: RespondRequest) -> RespondResponse:
+async def generate_response(request: RespondRequest, background_tasks: BackgroundTasks) -> RespondResponse:
     """Generate assistant response for given products."""
     try:
         agent = get_recommendation_agent()
@@ -118,9 +170,55 @@ async def generate_response(request: RespondRequest) -> RespondResponse:
             conversation_id=request.conversation_id,
             user_id=request.user_id,
             product_details=request.product_details,
-            metadata=request.metadata
+            metadata=request.metadata,
+            background_tasks=background_tasks
         )
         return RespondResponse(**result)
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/select_item", response_model=SelectItemResponse)
+async def select_item(request: SelectItemRequest) -> SelectItemResponse:
+    """Log a select_item event."""
+    try:
+        agent = get_recommendation_agent()
+        await agent.log_item_selection(request.user_id, request.conversation_id, request.item_id)
+        return SelectItemResponse(success=True)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/feedback", response_model=FeedbackResponse)
+async def submit_feedback(request: FeedbackRequest) -> FeedbackResponse:
+    """Submit thumbs up/down feedback for an item."""
+    try:
+        from apps.database.Mongo import ConversationRepository
+        ConversationRepository.save_feedback(
+            request.conversation_id, 
+            request.item_id, 
+            request.feedback_type
+        )
+        return FeedbackResponse(success=True, message=f"Feedback '{request.feedback_type}' recorded")
+    except Exception as e:
+        logger.error(f"Error recording feedback: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/explain", response_model=ExplainResponse)
+async def explain_recommendation(request: ExplainRequest) -> ExplainResponse:
+    """Explain why a product was recommended."""
+    try:
+        agent = get_recommendation_agent()
+        # We'll implement this method in RecommendationAgent
+        result = await agent.explain_recommendation(
+            request.user_id,
+            request.conversation_id,
+            request.item_id,
+            request.message
+        )
+        return ExplainResponse(**result)
+    except Exception as e:
+        logger.error(f"Error explaining recommendation: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -3,7 +3,8 @@ import {
   BrowseRequest, BrowseResponse,
   ExtractRequest, ExtractResponse,
   FilterRequest, FilterResponse,
-  RespondRequest, RespondResponse
+  RespondRequest, RespondResponse, 
+  ExplainResponse,
 } from "./types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -57,6 +58,24 @@ export async function fetchRecommendations(
   
   if (!response.ok) {
     throw new Error("Failed to get recommendations");
+  }
+  
+  return response.json();
+}
+
+export async function fetchBaselineRecommendations(
+  request: RecommendationRequest
+): Promise<BrowseResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/conversation/baseline`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+  
+  if (!response.ok) {
+    throw new Error("Failed to get baseline recommendations");
   }
   
   return response.json();
@@ -133,5 +152,41 @@ export async function respondToProducts(
     body: JSON.stringify(request),
   });
   if (!response.ok) throw new Error("Failed to generate response");
+  return response.json();
+}
+
+export async function selectProduct(asin: string, conversationId: string, userId: string): Promise<void> {
+  await fetch(`${API_BASE_URL}/api/conversation/select_item`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ item_id: asin, conversation_id: conversationId, user_id: userId }),
+  });
+}
+
+export async function submitFeedback(
+  asin: string, 
+  conversationId: string, 
+  userId: string, 
+  feedbackType: "like" | "dislike"
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/conversation/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ item_id: asin, conversation_id: conversationId, user_id: userId, feedback_type: feedbackType }),
+  });
+  if (!response.ok) throw new Error("Failed to submit feedback");
+}
+
+export async function explainRecommendation(
+  asin: string, 
+  conversationId: string, 
+  userId: string
+): Promise<ExplainResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/conversation/explain`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ item_id: asin, conversation_id: conversationId, user_id: userId }),
+  });
+  if (!response.ok) throw new Error("Failed to explain recommendation");
   return response.json();
 }

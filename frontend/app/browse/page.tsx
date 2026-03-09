@@ -118,6 +118,20 @@ function BrowseContent() {
     loadDiscovery();
   };
 
+  const handleRecommendationsUpdate = (recs: Recommendation[]) => {
+    const formattedProducts: Product[] = recs.map(p => ({
+      asin: p.item_id,
+      product_title: p.title,
+      product_description: p.description || "",
+      product_avg_rating: p.rating || 0,
+      product_price: p.price || "",
+      product_categories: p.categories || "",
+      product_main_category: p.main_category || "",
+      product_image_url: p.image || ""
+    }));
+    setProducts(formattedProducts);
+  };
+
   if (!isAuthenticated) {
     return null;
   }
@@ -201,7 +215,11 @@ function BrowseContent() {
                 ) : (
                   <div className="grid grid-cols-3 gap-3.5 max-[980px]:grid-cols-2 max-[560px]:grid-cols-1" aria-label="Recommended products">
                     {products.map((product) => (
-                      <ProductCard key={product.asin} product={product} />
+                      <ProductCard 
+                        key={product.asin} 
+                        product={product} 
+                        conversationId={conversationId}
+                      />
                     ))}
                   </div>
                 )}
@@ -214,6 +232,7 @@ function BrowseContent() {
             initialMessage={assistantResponse || "Here are your recommendations. Tell me if you want cheaper options, fragrance-free items, or a different product type."}
             quickChips={QUICK_CHIPS}
             initialConversationId={conversationId}
+            onRecommendationsUpdate={handleRecommendationsUpdate}
           />
         </div>
       </main>

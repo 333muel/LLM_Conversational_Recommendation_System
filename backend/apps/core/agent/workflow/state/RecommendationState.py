@@ -28,6 +28,9 @@ class RecommendationState(TypedDict):
     # Metadata about product sourcing
     product_metadata: Optional[Dict[str, Any]]
     
+    # Mode flag: 'recbole' or 'baseline'
+    mode: Optional[str]
+    
     # Final AI-generated recommendation response
     final_response: Optional[str]
     

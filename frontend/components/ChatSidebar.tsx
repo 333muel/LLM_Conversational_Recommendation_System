@@ -13,9 +13,15 @@ interface ChatSidebarProps {
   initialMessage?: string;
   quickChips?: Array<{ text: string; label: string }>;
   initialConversationId?: string;
+  onRecommendationsUpdate?: (recommendations: Recommendation[]) => void;
 }
 
-export function ChatSidebar({ initialMessage, quickChips = [], initialConversationId }: ChatSidebarProps) {
+export function ChatSidebar({ 
+  initialMessage, 
+  quickChips = [], 
+  initialConversationId,
+  onRecommendationsUpdate
+}: ChatSidebarProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -75,6 +81,10 @@ export function ChatSidebar({ initialMessage, quickChips = [], initialConversati
 
       if (response.conversation_id) {
         setConversationId(response.conversation_id);
+      }
+
+      if (response.recommendations && onRecommendationsUpdate) {
+        onRecommendationsUpdate(response.recommendations);
       }
 
       const assistantMessage: ChatMessage = {

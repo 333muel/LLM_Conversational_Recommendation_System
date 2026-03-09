@@ -94,3 +94,43 @@ class RespondResponse(BaseModel):
     conversation_id: str
     success: bool = True
 
+
+class SelectItemRequest(BaseModel):
+    item_id: str
+    conversation_id: str
+    user_id: str
+
+
+class SelectItemResponse(BaseModel):
+    success: bool = True
+
+
+class FeedbackRequest(BaseModel):
+    """Request model for item feedback (thumbs up/down)."""
+    item_id: str
+    conversation_id: str
+    user_id: str
+    feedback_type: str = Field(..., pattern="^(like|dislike)$")
+
+
+class FeedbackResponse(BaseModel):
+    """Response model for feedback submission."""
+    success: bool = True
+    message: str = "Feedback recorded"
+
+
+class ExplainRequest(BaseModel):
+    """Request model for explaining why a product was recommended."""
+    item_id: str
+    conversation_id: str
+    user_id: str
+    message: Optional[str] = "Why was this recommended?"
+
+
+class ExplainResponse(BaseModel):
+    """Response model for recommendation explanation."""
+    explanation: str
+    product_id: str
+    attribute_scores: Optional[Dict[str, float]] = None
+    success: bool = True
+

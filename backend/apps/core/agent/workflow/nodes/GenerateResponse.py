@@ -107,16 +107,14 @@ Based on the user's request, I have found the following top recommended products
 
 {top_products_text}{context_summary}
 
-Please provide a natural, helpful response to the user that:
-1. Acknowledges their request and shows you understand what they're looking for
-2. Presents the top 3 recommended products in a friendly, conversational way
-3. Highlights key features, benefits, or unique selling points of the top recommendations
-4. Groups products by category when relevant to make it easier to understand
-5. Mentions price and rating when they add value to the recommendation
-6. Keeps the response concise but informative (aim for 3-5 sentences per product mentioned)
-7. If the user's request doesn't perfectly match the products, acknowledge this but explain why these recommendations might still be useful
+Please provide a VERY CONCISE, friendly response (maximum 150 words total) that:
+1. Acknowledges the request.
+2. Briefly mentions the top 2-3 recommended products.
+3. Highlights ONE key selling point per product.
+4. Keeps descriptions short (1-2 sentences per product).
+5. Mentions price/rating only if particularly relevant.
 
-Format your response as a natural conversation, not a bullet list. Make it engaging and helpful. Focus on the top-ranked products but use the additional context to provide better insights."""
+Format your response as a natural conversation. Be brief and focused. Do not repeat product details from the list."""
 
         return prompt
     

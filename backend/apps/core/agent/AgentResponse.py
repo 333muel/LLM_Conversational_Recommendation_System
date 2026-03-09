@@ -4,7 +4,7 @@ import uuid
 import os
 from datetime import datetime
 from typing import Dict, Any, Optional, List
-from apps.core.agent.workflow.graph.RecommendationGraph import get_recommendation_graph, get_browse_graph
+from apps.core.agent.workflow.graph.RecommendationGraph import get_recommendation_graph, get_browse_graph, get_baseline_graph
 from apps.core.agent.workflow.state.RecommendationState import RecommendationState
 from apps.core.agent.workflow.utils.ConversationLogger import ConversationLogger
 from apps.database.Mongo import ConversationRepository
@@ -20,6 +20,7 @@ class RecommendationAgent:
     def __init__(self):
         self.recommendation_graph = get_recommendation_graph()
         self.browse_graph = get_browse_graph()
+        self.baseline_graph = get_baseline_graph()
     
     async def process_request(
         self,
@@ -28,24 +29,33 @@ class RecommendationAgent:
         user_id: Optional[str] = None,
         top_k: Optional[int] = None,
         model: Optional[str] = None,
-        algorithm: Optional[str] = None
+        algorithm: Optional[str] = None,
+        background_tasks: Any = None
     ) -> Dict[str, Any]:
-        """
-        Process a user recommendation request (Ask Assistant mode).
-        """
+        """Process a user recommendation request."""
         try:
-            # ... existing logic ...
-            if not user_id:
-                user_id = "AFNT6ZJCYQN3WDIKUSWHJDXNND2Q"
-            
-            if not conversation_id:
-                conversation_id = str(uuid.uuid4())
+            user_id = user_id or "AFNT6ZJCYQN3WDIKUSWHJDXNND2Q"
+            conversation_id = conversation_id or str(uuid.uuid4())
             
             history = ConversationRepository.get_history(conversation_id)
-            current_message = {"role": "user", "content": user_message}
+            session_start_time = ConversationRepository.get_conversation_created_at(conversation_id) or datetime.utcnow()
             
+            # --- Feedback Injection ---
+            # Get any pending thumbs up/down feedback from previous turns
+            pending_feedback = ConversationRepository.get_pending_feedback(conversation_id)
+            feedback_context = ""
+            if pending_feedback:
+                feedback_items = []
+                for item_id, info in pending_feedback.items():
+                    product = ProductRepository.get_product_by_id(item_id)
+                    title = product.get("product_title", "Unknown") if product else item_id
+                    feedback_items.append(f"- {title}: {info['type']}")
+                feedback_context = "\n[System Note: User feedback on previous recommendations:\n" + "\n".join(feedback_items) + "]"
+                # Clear feedback after retrieving it for this turn's context
+                ConversationRepository.clear_pending_feedback(conversation_id)
+
             initial_state: RecommendationState = {
-                "user_message": user_message,
+                "user_message": user_message + (f"\n{feedback_context}" if feedback_context else ""),
                 "constraints": None,
                 "user_id": user_id,
                 "top_k": top_k,
@@ -55,161 +65,140 @@ class RecommendationAgent:
                 "product_details": [],
                 "product_metadata": None,
                 "final_response": None,
-                "messages": history + [current_message]
+                "messages": history + [{"role": "user", "content": user_message}]
             }
             
-            logger.info(f"Processing ASK request for user: {user_id}")
-            # The graph itself needs to be awaited if it's compiled with async nodes
-            # However, langgraph works fine with async nodes.
             result = await self.recommendation_graph.ainvoke(initial_state)
-            # ... rest of the extraction and logging ...
             
-            # Extract results
-            raw_recs = result.get("raw_recommendations", [])
-            product_details = result.get("product_details", [])
             final_response = result.get("final_response", "No response generated")
+            product_details = result.get("product_details", [])
+            metadata = result.get("product_metadata", {})
             
-            # Update history with AI response
+            # Update history and save
             updated_messages = result.get("messages", [])
-            if final_response and final_response != "No response generated":
-                # Ensure the AI response is in the messages if not already there
-                ai_message = {"role": "assistant", "content": final_response}
-                # Check if it was already added by a node (GenerateResponseNode)
-                last_message = updated_messages[-1] if updated_messages else None
-                if not last_message or last_message.get("content") != final_response:
-                    updated_messages.append(ai_message)
-            
-            # Save updated history to MongoDB
             ConversationRepository.save_history(conversation_id, updated_messages)
             
-            # --- FS Logging (Extra Copy) ---
-            # Capture ALL information for the FS record
-            interaction_record = {
-                "timestamp": datetime.now().isoformat(),
-                "conversation_id": conversation_id,
-                "user_id": user_id,
-                "input": {
-                    "user_message": user_message,
-                    "history": history,
-                    "parameters": {
-                        "top_k": top_k,
-                        "algorithm": algorithm,
-                        "model": model
-                    }
-                },
-                "output": {
-                    "final_response": final_response,
-                    "recommendations": product_details[:top_k],
-                    "raw_recommendations": raw_recs[:top_k] if raw_recs else [],
-                    "updated_history": updated_messages
-                },
-                "state_snapshot": result  # Full LangGraph state at end
-            }
-            ConversationLogger.log_interaction(interaction_record)
-            # -------------------------------
-            
-            # Debug info
-            debug_info = {
-                "raw_recommendations_count": len(raw_recs),
-                "product_details_count": len(product_details),
-                "has_final_response": final_response is not None,
-                "algorithm_used": algorithm or "LightGCN",
-                "model_used": model or settings.ollama_model,
-                "history_length": len(updated_messages)
-            }
-            
-            # Return top_k recommendations (not all context items)
-            requested_top_k = top_k or settings.recommendation_top_k
-            top_recommendations = product_details[:requested_top_k]
+            # --- Non-blocking Post-processing (Logging & Profile) ---
+            if background_tasks:
+                background_tasks.add_task(
+                    self._post_process_interaction,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    user_message=user_message,
+                    final_response=final_response,
+                    product_details=product_details,
+                    metadata=metadata,
+                    session_start_time=session_start_time,
+                    turn_num=len(updated_messages) // 2 + 1,
+                    constraints=result.get("constraints")
+                )
+            else:
+                # Fallback if no background tasks provided
+                await self._post_process_interaction(
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    user_message=user_message,
+                    final_response=final_response,
+                    product_details=product_details,
+                    metadata=metadata,
+                    session_start_time=session_start_time,
+                    turn_num=len(updated_messages) // 2 + 1,
+                    constraints=result.get("constraints")
+                )
             
             return {
                 "response": final_response,
                 "conversation_id": conversation_id,
-                "recommendations": top_recommendations,
-                "raw_recommendations": raw_recs[:requested_top_k] if raw_recs else [],
-                "user_id": result.get("user_id"),
-                "success": len(raw_recs) > 0 or len(updated_messages) > 0,
-                "debug": debug_info
+                "recommendations": product_details[:top_k or settings.recommendation_top_k],
+                "raw_recommendations": result.get("raw_recommendations", [])[:top_k or settings.recommendation_top_k],
+                "user_id": user_id,
+                "success": True,
+                "debug": {"algorithm_used": algorithm or "LightGCN"}
             }
             
         except Exception as e:
-            logger.error(f"Error processing recommendation request: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return {
-                "response": f"I encountered an error: {str(e)}",
-                "conversation_id": conversation_id or str(uuid.uuid4()),
-                "recommendations": [],
-                "success": False,
-                "error": str(e)
-            }
+            logger.error(f"Error: {e}")
+            return {"response": f"Error: {e}", "conversation_id": conversation_id or str(uuid.uuid4()), "success": False}
 
     async def process_browse(
         self,
         user_message: str,
         conversation_id: Optional[str] = None,
         user_id: Optional[str] = None,
-        algorithm: Optional[str] = None
+        algorithm: Optional[str] = None,
+        background_tasks: Any = None
     ) -> Dict[str, Any]:
-        """
-        Process a browse discovery request (Enhanced Browse mode).
-        """
+        """Process a browse discovery request."""
         try:
-            if not user_id:
-                user_id = "AFNT6ZJCYQN3WDIKUSWHJDXNND2Q"
-            
-            if not conversation_id:
-                conversation_id = str(uuid.uuid4())
+            user_id = user_id or "AFNT6ZJCYQN3WDIKUSWHJDXNND2Q"
+            conversation_id = conversation_id or str(uuid.uuid4())
             
             history = ConversationRepository.get_history(conversation_id)
-            current_message = {"role": "user", "content": user_message}
+            session_start_time = ConversationRepository.get_conversation_created_at(conversation_id) or datetime.utcnow()
             
+            # --- Feedback Injection ---
+            # Get any pending thumbs up/down feedback from previous turns
+            pending_feedback = ConversationRepository.get_pending_feedback(conversation_id)
+            feedback_context = ""
+            if pending_feedback:
+                feedback_items = []
+                for item_id, info in pending_feedback.items():
+                    product = ProductRepository.get_product_by_id(item_id)
+                    title = product.get("product_title", "Unknown") if product else item_id
+                    feedback_items.append(f"- {title}: {info['type']}")
+                feedback_context = "\n[System Note: User feedback on previous recommendations:\n" + "\n".join(feedback_items) + "]"
+                # Clear feedback after retrieving it for this turn's context
+                ConversationRepository.clear_pending_feedback(conversation_id)
+
             initial_state: RecommendationState = {
-                "user_message": user_message,
+                "user_message": user_message + (f"\n{feedback_context}" if feedback_context else ""),
                 "constraints": None,
                 "user_id": user_id,
-                "top_k": 20, # Always return 20 for browse
+                "top_k": 20,
                 "algorithm": algorithm,
                 "model": settings.ollama_model,
                 "raw_recommendations": [],
                 "product_details": [],
                 "product_metadata": None,
                 "final_response": None,
-                "messages": history + [current_message]
+                "messages": history + [{"role": "user", "content": user_message}]
             }
             
-            logger.info(f"Processing BROWSE request for user: {user_id}")
             result = await self.browse_graph.ainvoke(initial_state)
             
-            product_details = result.get("product_details", [])
             final_response = result.get("final_response", "I've found some products for you.")
+            product_details = result.get("product_details", [])
             metadata = result.get("product_metadata", {})
             
-            # Update history
             updated_messages = result.get("messages", [])
-            if final_response:
-                ai_message = {"role": "assistant", "content": final_response}
-                last_message = updated_messages[-1] if updated_messages else None
-                if not last_message or last_message.get("content") != final_response:
-                    updated_messages.append(ai_message)
-            
             ConversationRepository.save_history(conversation_id, updated_messages)
             
-            # FS Logging
-            interaction_record = {
-                "timestamp": datetime.now().isoformat(),
-                "mode": "browse",
-                "conversation_id": conversation_id,
-                "user_id": user_id,
-                "input": {"user_message": user_message},
-                "output": {
-                    "final_response": final_response,
-                    "product_count": len(product_details),
-                    "metadata": metadata
-                },
-                "state_snapshot": result
-            }
-            ConversationLogger.log_interaction(interaction_record)
+            # --- Non-blocking Post-processing ---
+            if background_tasks:
+                background_tasks.add_task(
+                    self._post_process_interaction,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    user_message=user_message,
+                    final_response=final_response,
+                    product_details=product_details,
+                    metadata=metadata,
+                    session_start_time=session_start_time,
+                    turn_num=len(updated_messages) // 2 + 1,
+                    constraints=result.get("constraints")
+                )
+            else:
+                await self._post_process_interaction(
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    user_message=user_message,
+                    final_response=final_response,
+                    product_details=product_details,
+                    metadata=metadata,
+                    session_start_time=session_start_time,
+                    turn_num=len(updated_messages) // 2 + 1,
+                    constraints=result.get("constraints")
+                )
             
             return {
                 "response": final_response,
@@ -219,18 +208,236 @@ class RecommendationAgent:
                 "metadata": metadata,
                 "success": True
             }
+        except Exception as e:
+            logger.error(f"Error: {e}")
+            return {"response": f"Error: {e}", "conversation_id": conversation_id or str(uuid.uuid4()), "success": False}
+
+    async def process_baseline(
+        self,
+        user_message: str,
+        conversation_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        top_k: Optional[int] = None,
+        model: Optional[str] = None,
+        background_tasks: Any = None
+    ) -> Dict[str, Any]:
+        """Process a baseline request (no RecBole) through the specialized LangGraph."""
+        try:
+            user_id = user_id or "AFNT6ZJCYQN3WDIKUSWHJDXNND2Q"
+            conversation_id = conversation_id or str(uuid.uuid4())
+            
+            history = ConversationRepository.get_history(conversation_id)
+            session_start_time = ConversationRepository.get_conversation_created_at(conversation_id) or datetime.utcnow()
+            
+            # --- Feedback Injection ---
+            # Get any pending thumbs up/down feedback from previous turns
+            pending_feedback = ConversationRepository.get_pending_feedback(conversation_id)
+            feedback_context = ""
+            if pending_feedback:
+                feedback_items = []
+                for item_id, info in pending_feedback.items():
+                    product = ProductRepository.get_product_by_id(item_id)
+                    title = product.get("product_title", "Unknown") if product else item_id
+                    feedback_items.append(f"- {title}: {info['type']}")
+                feedback_context = "\n[System Note: User feedback on previous recommendations:\n" + "\n".join(feedback_items) + "]"
+                # Clear feedback after retrieving it for this turn's context
+                ConversationRepository.clear_pending_feedback(conversation_id)
+
+            initial_state: RecommendationState = {
+                "user_message": user_message + (f"\n{feedback_context}" if feedback_context else ""),
+                "constraints": None,
+                "user_id": user_id,
+                "top_k": top_k or 20,
+                "algorithm": None,
+                "model": model or settings.ollama_model,
+                "raw_recommendations": [],
+                "product_details": [],
+                "product_metadata": None,
+                "final_response": None,
+                "messages": history + [{"role": "user", "content": user_message}],
+                "mode": "baseline"
+            }
+            
+            result = await self.baseline_graph.ainvoke(initial_state)
+            
+            final_response = result.get("final_response", "I've found some products for you.")
+            product_details = result.get("product_details", [])
+            metadata = result.get("product_metadata", {})
+            
+            updated_messages = result.get("messages", [])
+            ConversationRepository.save_history(conversation_id, updated_messages)
+            
+            # --- Non-blocking Post-processing ---
+            if background_tasks:
+                background_tasks.add_task(
+                    self._post_process_interaction,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    user_message=user_message,
+                    final_response=final_response,
+                    product_details=product_details,
+                    metadata=metadata,
+                    session_start_time=session_start_time,
+                    turn_num=len(updated_messages) // 2 + 1,
+                    constraints=result.get("constraints")
+                )
+            else:
+                await self._post_process_interaction(
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    user_message=user_message,
+                    final_response=final_response,
+                    product_details=product_details,
+                    metadata=metadata,
+                    session_start_time=session_start_time,
+                    turn_num=len(updated_messages) // 2 + 1,
+                    constraints=result.get("constraints")
+                )
+            
+            return {
+                "response": final_response,
+                "conversation_id": conversation_id,
+                "recommendations": product_details,
+                "constraints": result.get("constraints", {}),
+                "metadata": metadata,
+                "success": True
+            }
+        except Exception as e:
+            logger.error(f"Baseline error: {e}")
+            return {"response": f"Error: {e}", "conversation_id": conversation_id or str(uuid.uuid4()), "success": False}
+
+    async def _post_process_interaction(self, user_id, conversation_id, user_message, final_response, product_details, metadata, session_start_time, turn_num, constraints):
+        """Asynchronous task to update user profile and log interaction."""
+        try:
+            # 1. Update User Profile (AI Analysis)
+            from apps.core.agent.workflow.nodes.UpdateUserProfile import update_user_profile_node
+            # Create a minimal state for the node
+            mock_state = {
+                "user_id": user_id,
+                "user_message": user_message,
+                "final_response": final_response
+            }
+            await update_user_profile_node.execute(mock_state)
+            
+            # 2. Log Interaction
+            recommended_items = [{"item_id": p.get("item_id"), "price": p.get("price")} for p in product_details]
+            fallback_triggered = metadata.get("source") in ["mixed_db_fallback", "recbole_default"] if metadata else False
+            
+            interaction_record = {
+                "top_level": {
+                    "participant_id": user_id,
+                    "session_start_time": session_start_time.isoformat(),
+                    "session_end_time": datetime.utcnow().isoformat()
+                },
+                "task_level": {
+                    "profile": user_id,
+                    "task_id": conversation_id,
+                    "task_start_time": session_start_time.isoformat(),
+                    "task_end_time": datetime.utcnow().isoformat()
+                },
+                "dialogue_turn": {
+                    "turn_num": turn_num,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "speaker": "system",
+                    "full_text": final_response,
+                    "user_input": user_message,
+                    "recommended_items": recommended_items,
+                    "word_count": len(final_response.split()) if final_response else 0,
+                    "clarification_question": final_response.strip().endswith("?") if final_response else False,
+                    "fallback_triggered": fallback_triggered
+                },
+                "events": {
+                    "refine_constraint": constraints
+                }
+            }
+            ConversationLogger.log_interaction(interaction_record)
             
         except Exception as e:
-            logger.error(f"Error processing browse request: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
+            logger.error(f"Error in background post-processing: {e}")
+
+    def _log_interaction(self, user_id, conversation_id, user_message, final_response, product_details, metadata, session_start_time, turn_num, constraints):
+        """Deprecated: Internal helper to log hierarchical conversation data. Use _post_process_interaction instead."""
+        pass
+
+    async def explain_recommendation(
+        self,
+        user_id: str,
+        conversation_id: str,
+        item_id: str,
+        user_query: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Explain why a specific product was recommended with structured attribute scores."""
+        from apps.database.Mongo import ProductRepository
+        from apps.core.llm.Ollama import OllamaClient
+        import json
+        
+        try:
+            # 1. Get product details
+            product = ProductRepository.get_product_by_id(item_id)
+            if not product:
+                return {"explanation": "Product not found.", "product_id": item_id, "success": False}
+                
+            # 2. Get user profile context
+            profile = await UserProfileRepository.get_profile(user_id)
+            profile_context = f"User preferences: {profile.get('preferences', {})}" if profile else "No profile data yet."
+            
+            # 3. Create explanation prompt
+            prompt = f"""You are a beauty sales expert. Explain why the following product was recommended to the user.
+            
+Product: {product.get('product_title')}
+Description: {product.get('product_description')}
+Rating: {product.get('product_avg_rating')}
+Price: {product.get('product_price')}
+Categories: {product.get('product_categories')}
+
+User Context: {profile_context}
+User Query: {user_query or "Why was this recommended?"}
+
+First, provide a warm, 2-3 sentence explanation of why this product fits the user.
+Second, provide attribute match scores on a scale of 0.0 to 1.0 for the following categories:
+- category_match
+- price_relevance
+- quality_rating
+- preference_alignment
+
+Output format:
+Explanation text...
+JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "preference_alignment": 0.0}}
+"""
+            client = OllamaClient()
+            response = await client.generate(prompt=prompt)
+            
+            # Extract JSON for the "graph" (attribute scores)
+            explanation_text = response.split("JSON:")[0].strip()
+            attribute_scores = {"category_match": 0.8, "price_relevance": 0.7, "quality_rating": 0.9, "preference_alignment": 0.8}
+            
+            try:
+                if "JSON:" in response:
+                    json_str = response.split("JSON:")[1].strip()
+                    attribute_scores = json.loads(json_str)
+            except Exception as e:
+                logger.error(f"Error parsing attribute scores from LLM: {e}")
+
             return {
-                "response": f"I encountered an error: {str(e)}",
-                "conversation_id": conversation_id or str(uuid.uuid4()),
-                "products": [],
-                "success": False,
-                "error": str(e)
+                "explanation": explanation_text,
+                "product_id": item_id,
+                "attribute_scores": attribute_scores, # Frontend will use this for the "simple graph"
+                "success": True
             }
+        except Exception as e:
+            logger.error(f"Explain error: {e}")
+            return {"explanation": f"Error: {e}", "product_id": item_id, "success": False}
+
+    async def log_item_selection(self, user_id: str, conversation_id: str, item_id: str):
+        """Log a select_item event."""
+        log_data = {
+            "participant_id": user_id,
+            "task_id": conversation_id,
+            "event": "select_item",
+            "item_id": item_id,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        ConversationLogger.log_interaction(log_data)
 
     async def extract_constraints(self, user_message: str) -> Dict[str, Any]:
         """Extract structured constraints from user message."""
@@ -327,15 +534,15 @@ class RecommendationAgent:
         conversation_id: str,
         user_id: str,
         product_details: List[Dict[str, Any]],
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        background_tasks: Any = None
     ) -> Dict[str, Any]:
         """Generate Assistant response for given products."""
         try:
-            # We skip the graph and use GenerateResponseNode logic directly
-            # to avoid re-running RecBole or filtering
             from apps.core.agent.workflow.nodes.GenerateResponse import generate_response_node
             
             history = ConversationRepository.get_history(conversation_id)
+            session_start_time = ConversationRepository.get_conversation_created_at(conversation_id) or datetime.utcnow()
             current_message = {"role": "user", "content": user_message}
             
             state: RecommendationState = {
@@ -359,20 +566,40 @@ class RecommendationAgent:
             updated_messages = state["messages"] + [{"role": "assistant", "content": final_response}]
             ConversationRepository.save_history(conversation_id, updated_messages)
             
+            # --- Non-blocking Post-processing ---
+            if background_tasks:
+                background_tasks.add_task(
+                    self._post_process_interaction,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    user_message=user_message,
+                    final_response=final_response,
+                    product_details=product_details,
+                    metadata=metadata,
+                    session_start_time=session_start_time,
+                    turn_num=len(updated_messages) // 2 + 1,
+                    constraints=None
+                )
+            else:
+                await self._post_process_interaction(
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    user_message=user_message,
+                    final_response=final_response,
+                    product_details=product_details,
+                    metadata=metadata,
+                    session_start_time=session_start_time,
+                    turn_num=len(updated_messages) // 2 + 1,
+                    constraints=None
+                )
+            
             return {"response": final_response, "conversation_id": conversation_id, "success": True}
         except Exception as e:
             logger.error(f"Respond error: {e}")
             return {"response": f"Error: {e}", "conversation_id": conversation_id, "success": False}
 
-
 # Global agent instance
-recommendation_agent: Optional[RecommendationAgent] = None
-
+recommendation_agent = RecommendationAgent()
 
 def get_recommendation_agent() -> RecommendationAgent:
-    """Get or create recommendation agent instance."""
-    global recommendation_agent
-    if recommendation_agent is None:
-        recommendation_agent = RecommendationAgent()
     return recommendation_agent
-

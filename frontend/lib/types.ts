@@ -117,6 +117,20 @@ export interface RespondResponse {
   success: boolean;
 }
 
+export interface ExplainRequest {
+  item_id: string;
+  conversation_id: string;
+  user_id: string;
+  message?: string;
+}
+
+export interface ExplainResponse {
+  explanation: string;
+  product_id: string;
+  attribute_scores?: Record<string, number>;
+  success: boolean;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";

@@ -20,13 +20,20 @@ class ConversationLogger:
             interaction_data: Dictionary containing all relevant interaction details
         """
         try:
-            # Get conversation ID
-            conversation_id = interaction_data.get("conversation_id", "unknown")
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")
+            # Get IDs for filename
+            # Check multiple possible keys for conversation/task ID
+            conversation_id = (
+                interaction_data.get("conversation_id") or 
+                interaction_data.get("task_id") or 
+                interaction_data.get("task_level", {}).get("task_id") or 
+                "unknown"
+            )
+            
+            now = datetime.now()
+            date_str = now.strftime("%Y-%m-%d")
+            time_str = now.strftime("%H-%M-%S-%f")
             
             # Define log directory: backend/logs/conversations
-            # Current file is in backend/apps/core/agent/workflow/utils/
-            # Path to logs: backend/logs/
             current_file = Path(__file__).resolve()
             project_root = current_file.parent.parent.parent.parent.parent.parent
             log_dir = project_root / "logs" / "conversations"
@@ -34,8 +41,8 @@ class ConversationLogger:
             # Ensure log directory exists
             log_dir.mkdir(parents=True, exist_ok=True)
             
-            # Create unique filename
-            filename = f"conv_{conversation_id}_{timestamp}.json"
+            # Create unique filename: conv_[date]_[time]_[conversation_id].json
+            filename = f"conv_{date_str}_{time_str}_{conversation_id}.json"
             file_path = log_dir / filename
             
             # Save interaction data as JSON

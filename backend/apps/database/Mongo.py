@@ -1,6 +1,6 @@
 """MongoDB database connection and operations."""
 from datetime import datetime
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 from pymongo import MongoClient
 from pymongo.database import Database
 from pymongo.collection import Collection
@@ -76,19 +76,19 @@ class ProductRepository:
     @classmethod
     def filter_products(
         cls, 
-        product_ids: List[str], 
+        product_ids: Optional[List[str]], 
         category: Optional[str] = None,
         max_price: Optional[float] = None,
         min_rating: Optional[float] = None,
         keywords: Optional[List[str]] = None
     ) -> List[Dict]:
         """
-        Filter a list of product IDs by additional constraints using Text Index.
+        Filter products by additional constraints using Text Index.
+        If product_ids is None, search the entire collection.
         """
         collection = cls.get_collection()
         
         # Ensure text index exists
-        # weights priority: title > categories > description
         collection.create_index([
             ("product_title", "text"),
             ("product_categories", "text"),
@@ -99,7 +99,9 @@ class ProductRepository:
             "product_description": 1
         }, name="product_text_index")
 
-        query = {"asin": {"$in": product_ids}}
+        query = {}
+        if product_ids is not None:
+            query["asin"] = {"$in": product_ids}
         
         # Combine category and keywords for text search
         search_terms = []
@@ -242,16 +244,96 @@ class ConversationRepository:
         collection = cls.get_collection()
         doc = collection.find_one({"conversation_id": conversation_id})
         return doc.get("messages", []) if doc else []
-    
+
+    @classmethod
+    def get_conversation_created_at(cls, conversation_id: str) -> Optional[datetime]:
+        """Get the creation time of a conversation."""
+        collection = cls.get_collection()
+        doc = collection.find_one({"conversation_id": conversation_id})
+        return doc.get("created_at") if doc else None
+
     @classmethod
     def save_history(cls, conversation_id: str, messages: List[Dict]) -> None:
         """Save conversation history."""
         collection = cls.get_collection()
+        now = datetime.utcnow()
         collection.update_one(
             {"conversation_id": conversation_id},
             {
                 "$set": {
                     "messages": messages,
+                    "updated_at": now
+                },
+                "$setOnInsert": {
+                    "created_at": now
+                }
+            },
+            upsert=True
+        )
+
+    @classmethod
+    def save_feedback(cls, conversation_id: str, item_id: str, feedback_type: str) -> None:
+        """Save temporary feedback for an item in a conversation."""
+        collection = cls.get_collection()
+        # Store feedback in a separate field 'pending_feedback'
+        collection.update_one(
+            {"conversation_id": conversation_id},
+            {
+                "$set": {
+                    f"pending_feedback.{item_id}": {
+                        "type": feedback_type,
+                        "timestamp": datetime.utcnow()
+                    },
+                    "updated_at": datetime.utcnow()
+                }
+            },
+            upsert=True
+        )
+
+    @classmethod
+    def get_pending_feedback(cls, conversation_id: str) -> Dict[str, Any]:
+        """Get all pending feedback for a conversation."""
+        collection = cls.get_collection()
+        doc = collection.find_one({"conversation_id": conversation_id})
+        return doc.get("pending_feedback", {}) if doc else {}
+
+    @classmethod
+    def clear_pending_feedback(cls, conversation_id: str) -> None:
+        """Clear pending feedback after it has been processed."""
+        collection = cls.get_collection()
+        collection.update_one(
+            {"conversation_id": conversation_id},
+            {"$unset": {"pending_feedback": ""}}
+        )
+
+
+class UserProfileRepository:
+    """Repository for user profiles and preferences."""
+    
+    COLLECTION_NAME = "user_profiles"
+    
+    @classmethod
+    def get_collection(cls) -> Collection:
+        """Get user profiles collection."""
+        collection = MongoDB.get_collection(cls.COLLECTION_NAME)
+        collection.create_index("user_id", unique=True)
+        return collection
+    
+    @classmethod
+    def get_profile(cls, user_id: str) -> Optional[Dict]:
+        """Get user profile by user ID."""
+        collection = cls.get_collection()
+        return collection.find_one({"user_id": user_id})
+    
+    @classmethod
+    def update_preferences(cls, user_id: str, preferences: Dict[str, Any]) -> None:
+        """Update user preferences."""
+        collection = cls.get_collection()
+        collection.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "preferences": preferences,
                     "updated_at": datetime.utcnow()
                 }
             },

@@ -15,12 +15,12 @@ import { Badge } from "@/components/ui/badge";
 import { MessageCircle, Send, X, Star } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import { useChat } from "@/contexts/ChatContext";
-import { fetchRecommendations } from "@/lib/api";
+import { fetchRecommendations, fetchBaselineRecommendations } from "@/lib/api";
 import { ChatMessage, Recommendation } from "@/lib/types";
 import Link from "next/link";
 
 export function Chatbot() {
-  const { isOpen, setIsOpen, initialMessage, setInitialMessage } = useChat();
+  const { isOpen, setIsOpen, initialMessage, setInitialMessage, agentType, setAgentType } = useChat();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -65,12 +65,27 @@ export function Chatbot() {
     setIsLoading(true);
 
     try {
-      const response = await fetchRecommendations({
-        message: messageText,
-        conversation_id: conversationId,
-        user_id: userId,
-        top_k: 5,
-      });
+      let response;
+      if (agentType === "baseline") {
+        const baselineResult = await fetchBaselineRecommendations({
+          message: messageText,
+          conversation_id: conversationId,
+          user_id: userId,
+          top_k: 5,
+        });
+        response = {
+          response: baselineResult.response,
+          recommendations: baselineResult.products,
+          conversation_id: baselineResult.conversation_id
+        };
+      } else {
+        response = await fetchRecommendations({
+          message: messageText,
+          conversation_id: conversationId,
+          user_id: userId,
+          top_k: 5,
+        });
+      }
 
       // Update conversation ID for subsequent messages
       if (response.conversation_id) {
@@ -112,10 +127,26 @@ export function Chatbot() {
 
   return (
     <>
+      {/* RecBole Assistant Button */}
       <button
-        onClick={() => setIsOpen(true)}
+        onClick={() => {
+          setAgentType("recbole");
+          setIsOpen(true);
+        }}
         className="fixed right-[18px] bottom-[18px] z-50 w-14 h-14 rounded-[18px] border border-[rgba(45,212,191,.45)] bg-[rgba(45,212,191,.22)] shadow-[var(--shadow2)] cursor-pointer flex items-center justify-center transition-all duration-150 hover:-translate-y-0.5 hover:bg-[rgba(45,212,191,.28)]"
-        aria-label="Open digital sales assistant"
+        aria-label="Open RecBole sales assistant"
+      >
+        <span className="text-xl">💬</span>
+      </button>
+
+      {/* Baseline Assistant Button (Purple) */}
+      <button
+        onClick={() => {
+          setAgentType("baseline");
+          setIsOpen(true);
+        }}
+        className="fixed right-[82px] bottom-[18px] z-50 w-14 h-14 rounded-[18px] border border-[rgba(167,139,250,.45)] bg-[rgba(167,139,250,.22)] shadow-[var(--shadow2)] cursor-pointer flex items-center justify-center transition-all duration-150 hover:-translate-y-0.5 hover:bg-[rgba(167,139,250,.28)]"
+        aria-label="Open Baseline sales assistant"
       >
         <span className="text-xl">💬</span>
       </button>
@@ -125,9 +156,13 @@ export function Chatbot() {
           <DrawerHeader className="border-b border-[var(--line)] p-3.5">
             <div className="flex items-center justify-between gap-2.5">
               <div>
-                <DrawerTitle className="text-sm font-extrabold">Digital Sales Assistant</DrawerTitle>
+                <DrawerTitle className="text-sm font-extrabold">
+                  {agentType === "baseline" ? "Baseline AI Assistant" : "Digital Sales Assistant"}
+                </DrawerTitle>
                 <DrawerDescription className="text-[13px] text-[var(--muted-foreground)] leading-[1.45] mt-0.5">
-                  Ask me about beauty products and I'll help you find what you're looking for!
+                  {agentType === "baseline" 
+                    ? "Direct MongoDB search assistant (No RecBole)" 
+                    : "AI-powered recommendation assistant using RecBole"}
                 </DrawerDescription>
               </div>
               <Button
