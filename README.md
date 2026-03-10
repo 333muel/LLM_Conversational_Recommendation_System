@@ -26,7 +26,7 @@ This is the recommended way to run the full stack (MongoDB, Backend, and Fronten
     # After downloading ollama
     ollama pull qwen3:latest
     ```
-4. **Start Docker Server**:
+4. **Pull Mongodb Server**:
     ```bash
     docker pull mongo:8.0
     ```
