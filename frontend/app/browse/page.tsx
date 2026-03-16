@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useUser } from "@/contexts/UserContext";
+import { useChat } from "@/contexts/ChatContext";
 import { TopNav } from "@/components/TopNav";
 import { ChatSidebar } from "@/components/ChatSidebar";
 import { ProductCard } from "@/components/ProductCard";
@@ -21,6 +22,7 @@ const QUICK_CHIPS = [
 
 function BrowseContent() {
   const { isAuthenticated, userId } = useUser();
+  const { llmProvider } = useChat();
   const router = useRouter();
   const searchParams = useSearchParams();
   const query = searchParams.get("q");
@@ -79,6 +81,7 @@ function BrowseContent() {
               conversation_id: currentConvId,
               user_id: userId,
               product_details: filterRes.products,
+              llm_provider: llmProvider,
               metadata: filterRes.metadata
             }).then(respondRes => {
               if (respondRes.success) {
@@ -92,7 +95,7 @@ function BrowseContent() {
 
       if (!isGeneric) {
         // Trigger extraction but don't AWAIT it here for the whole function
-        extractConstraints({ message: userMessage, user_id: userId })
+        extractConstraints({ message: userMessage, user_id: userId, llm_provider: llmProvider })
           .then(extractRes => {
             setConstraints(extractRes.constraints);
             runFilterAndRespond(extractRes.constraints);

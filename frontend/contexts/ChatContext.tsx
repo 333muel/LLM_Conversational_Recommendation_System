@@ -11,6 +11,8 @@ interface ChatContextType {
   setInitialMessage: (msg: string | null) => void;
   agentType: "recbole" | "baseline";
   setAgentType: (type: "recbole" | "baseline") => void;
+  llmProvider: "ollama" | "dashscope";
+  setLlmProvider: (provider: "ollama" | "dashscope") => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -19,6 +21,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [initialMessage, setInitialMessage] = useState<string | null>(null);
   const [agentType, setAgentType] = useState<"recbole" | "baseline">("recbole");
+  const [llmProvider, setLlmProvider] = useState<"ollama" | "dashscope">("ollama");
 
   const openChat = (message?: string, type?: "recbole" | "baseline") => {
     if (message) {
@@ -46,6 +49,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         setInitialMessage,
         agentType,
         setAgentType,
+        llmProvider,
+        setLlmProvider,
       }}
     >
       {children}

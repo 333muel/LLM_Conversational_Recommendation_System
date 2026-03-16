@@ -2,7 +2,6 @@
 from typing import Dict, Any, List, Optional
 from apps.core.agent.workflow.nodes.BaseNode import BaseNode
 from apps.core.agent.workflow.state.RecommendationState import RecommendationState
-from apps.core.llm.Ollama import ollama_client
 from apps.database.Mongo import ProductRepository
 from apps.config.Tracing import get_logger
 
@@ -165,12 +164,13 @@ Format your response as a natural conversation. Be brief and focused. Do not rep
                 if msg.get("role") != "system":
                     chat_messages.append(msg)
             
-            # Generate response using Ollama chat
-            llm_model = model or settings.ollama_model
-            logger.info(f"Generating AI response using model: {llm_model}")
+            # Generate response using LLM
+            llm_provider = state.get("llm_provider", "ollama")
+            llm_model = model or (settings.dashscope_model if llm_provider == "dashscope" else settings.ollama_model)
+            logger.info(f"Generating AI response using provider: {llm_provider}, model: {llm_model}")
             
-            from apps.core.llm.Ollama import OllamaClient
-            client = OllamaClient(model=llm_model)
+            from apps.core.llm import get_llm_client
+            client = get_llm_client(provider=llm_provider, model=llm_model)
             
             response = await client.chat(messages=chat_messages)
             

@@ -7,7 +7,7 @@ from typing import Dict, Any, Optional, List
 from apps.core.agent.workflow.graph.RecommendationGraph import get_recommendation_graph, get_browse_graph, get_baseline_graph
 from apps.core.agent.workflow.state.RecommendationState import RecommendationState
 from apps.core.agent.workflow.utils.ConversationLogger import ConversationLogger
-from apps.database.Mongo import ConversationRepository
+from apps.database.Mongo import ConversationRepository, UserProfileRepository, ProductRepository
 from apps.config.Tracing import get_logger
 from apps.config.Setting import settings
 
@@ -29,6 +29,7 @@ class RecommendationAgent:
         user_id: Optional[str] = None,
         top_k: Optional[int] = None,
         model: Optional[str] = None,
+        llm_provider: Optional[str] = "ollama",
         algorithm: Optional[str] = None,
         background_tasks: Any = None
     ) -> Dict[str, Any]:
@@ -61,6 +62,7 @@ class RecommendationAgent:
                 "top_k": top_k,
                 "algorithm": algorithm,
                 "model": model,
+                "llm_provider": llm_provider,
                 "raw_recommendations": [],
                 "product_details": [],
                 "product_metadata": None,
@@ -125,6 +127,7 @@ class RecommendationAgent:
         user_message: str,
         conversation_id: Optional[str] = None,
         user_id: Optional[str] = None,
+        llm_provider: Optional[str] = "ollama",
         algorithm: Optional[str] = None,
         background_tasks: Any = None
     ) -> Dict[str, Any]:
@@ -157,6 +160,7 @@ class RecommendationAgent:
                 "top_k": 20,
                 "algorithm": algorithm,
                 "model": settings.ollama_model,
+                "llm_provider": llm_provider,
                 "raw_recommendations": [],
                 "product_details": [],
                 "product_metadata": None,
@@ -219,6 +223,7 @@ class RecommendationAgent:
         user_id: Optional[str] = None,
         top_k: Optional[int] = None,
         model: Optional[str] = None,
+        llm_provider: Optional[str] = "ollama",
         background_tasks: Any = None
     ) -> Dict[str, Any]:
         """Process a baseline request (no RecBole) through the specialized LangGraph."""
@@ -250,6 +255,7 @@ class RecommendationAgent:
                 "top_k": top_k or 20,
                 "algorithm": None,
                 "model": model or settings.ollama_model,
+                "llm_provider": llm_provider,
                 "raw_recommendations": [],
                 "product_details": [],
                 "product_metadata": None,
@@ -364,11 +370,11 @@ class RecommendationAgent:
         user_id: str,
         conversation_id: str,
         item_id: str,
-        user_query: Optional[str] = None
+        user_query: Optional[str] = None,
+        llm_provider: Optional[str] = "ollama"
     ) -> Dict[str, Any]:
         """Explain why a specific product was recommended with structured attribute scores."""
-        from apps.database.Mongo import ProductRepository
-        from apps.core.llm.Ollama import OllamaClient
+        from apps.core.llm import get_llm_client
         import json
         
         try:
@@ -378,7 +384,7 @@ class RecommendationAgent:
                 return {"explanation": "Product not found.", "product_id": item_id, "success": False}
                 
             # 2. Get user profile context
-            profile = await UserProfileRepository.get_profile(user_id)
+            profile = UserProfileRepository.get_profile(user_id)
             profile_context = f"User preferences: {profile.get('preferences', {})}" if profile else "No profile data yet."
             
             # 3. Create explanation prompt
@@ -404,7 +410,7 @@ Output format:
 Explanation text...
 JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "preference_alignment": 0.0}}
 """
-            client = OllamaClient()
+            client = get_llm_client(provider=llm_provider)
             response = await client.generate(prompt=prompt)
             
             # Extract JSON for the "graph" (attribute scores)
@@ -439,10 +445,10 @@ JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "p
         }
         ConversationLogger.log_interaction(log_data)
 
-    async def extract_constraints(self, user_message: str) -> Dict[str, Any]:
+    async def extract_constraints(self, user_message: str, llm_provider: Optional[str] = "ollama") -> Dict[str, Any]:
         """Extract structured constraints from user message."""
         from apps.core.agent.workflow.utils.QueryProcessor import QueryProcessor
-        processor = QueryProcessor()
+        processor = QueryProcessor(provider=llm_provider)
         constraints = await processor.process(user_message)
         return {
             "constraints": constraints,
@@ -458,7 +464,6 @@ JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "p
     ) -> Dict[str, Any]:
         """Filter products based on constraints and RecBole candidates (Async-safe)."""
         from apps.core.agent.workflow.tools.RecBoleModel import get_recbole_engine
-        from apps.database.Mongo import ProductRepository
         
         try:
             # Get candidates (Top 100) - Run in thread to avoid blocking loop
@@ -534,6 +539,7 @@ JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "p
         conversation_id: str,
         user_id: str,
         product_details: List[Dict[str, Any]],
+        llm_provider: Optional[str] = "ollama",
         metadata: Optional[Dict[str, Any]] = None,
         background_tasks: Any = None
     ) -> Dict[str, Any]:
@@ -552,6 +558,7 @@ JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "p
                 "top_k": len(product_details),
                 "algorithm": None,
                 "model": settings.ollama_model,
+                "llm_provider": llm_provider,
                 "raw_recommendations": [],
                 "product_details": product_details,
                 "product_metadata": metadata,

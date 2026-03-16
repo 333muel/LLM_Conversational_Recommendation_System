@@ -1,5 +1,5 @@
 """Node for direct MongoDB product search (Baseline without RecBole)."""
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from apps.core.agent.workflow.nodes.BaseNode import BaseNode
 from apps.core.agent.workflow.state.RecommendationState import RecommendationState
 from apps.core.agent.workflow.utils.QueryProcessor import QueryProcessor
@@ -11,16 +11,18 @@ logger = get_logger(__name__)
 class BaselineSearchNode(BaseNode):
     """Node that searches products directly from MongoDB based on AI intent extraction."""
     
-    def __init__(self):
-        self.query_processor = QueryProcessor()
+    def __init__(self, provider: Optional[str] = "ollama"):
+        self._provider = provider
 
     async def execute(self, state: RecommendationState) -> Dict[str, Any]:
         """Search MongoDB directly using extracted constraints."""
         try:
             user_message = state.get("user_message", "")
+            llm_provider = state.get("llm_provider", self._provider)
             
             # 1. AI Query Processing to get constraints
-            constraints = await self.query_processor.process(user_message)
+            processor = QueryProcessor(provider=llm_provider)
+            constraints = await processor.process(user_message)
             
             # 2. Search MongoDB directly (no RecBole candidate set)
             # Use filter_products but with an empty product_ids list to search entire DB

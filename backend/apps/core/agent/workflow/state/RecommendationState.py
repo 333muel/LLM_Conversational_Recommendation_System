@@ -18,6 +18,7 @@ class RecommendationState(TypedDict):
     top_k: Optional[int]
     algorithm: Optional[str]
     model: Optional[str]
+    llm_provider: Optional[str]
     
     # Raw recommendations from RecBole (candidates)
     raw_recommendations: List[Dict[str, any]]

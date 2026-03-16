@@ -47,6 +47,7 @@ async def get_recommendations(request: RecommendationRequest, background_tasks: 
             user_id=request.user_id,
             top_k=request.top_k,
             model=request.model,
+            llm_provider=request.llm_provider,
             algorithm=request.algorithm,
             background_tasks=background_tasks
         )
@@ -77,6 +78,7 @@ async def get_browse_discovery(request: BrowseRequest, background_tasks: Backgro
             user_message=request.message,
             conversation_id=request.conversation_id,
             user_id=request.user_id,
+            llm_provider=request.llm_provider,
             algorithm=request.algorithm,
             background_tasks=background_tasks
         )
@@ -117,6 +119,7 @@ async def get_baseline_recommendations(request: RecommendationRequest, backgroun
             user_id=request.user_id,
             top_k=request.top_k,
             model=request.model,
+            llm_provider=request.llm_provider,
             background_tasks=background_tasks
         )
         
@@ -142,7 +145,7 @@ async def extract_constraints(request: ExtractRequest) -> ExtractResponse:
     """Extract structured constraints from user message."""
     try:
         agent = get_recommendation_agent()
-        result = await agent.extract_constraints(request.message)
+        result = await agent.extract_constraints(request.message, llm_provider=request.llm_provider)
         return ExtractResponse(**result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -170,6 +173,7 @@ async def generate_response(request: RespondRequest, background_tasks: Backgroun
             conversation_id=request.conversation_id,
             user_id=request.user_id,
             product_details=request.product_details,
+            llm_provider=request.llm_provider,
             metadata=request.metadata,
             background_tasks=background_tasks
         )
@@ -215,7 +219,8 @@ async def explain_recommendation(request: ExplainRequest) -> ExplainResponse:
             request.user_id,
             request.conversation_id,
             request.item_id,
-            request.message
+            request.message,
+            llm_provider=request.llm_provider
         )
         return ExplainResponse(**result)
     except Exception as e:

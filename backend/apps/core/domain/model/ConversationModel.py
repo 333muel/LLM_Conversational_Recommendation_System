@@ -10,6 +10,7 @@ class RecommendationRequest(BaseModel):
     user_id: Optional[str] = Field(None, description="Optional user ID (uses demo user if not provided)")
     top_k: Optional[int] = Field(None, ge=1, le=50, description="Number of recommendations to return (default: 10)")
     model: Optional[str] = Field(None, description="LLM model to use (default: qwen3:latest)")
+    llm_provider: Optional[str] = Field("ollama", description="LLM provider to use (e.g., 'ollama', 'dashscope')")
     algorithm: Optional[str] = Field(None, description="RecBole algorithm/checkpoint to use (e.g., 'LightGCN', 'BPR'). If not found, defaults to LightGCN")
 
 
@@ -44,6 +45,7 @@ class BrowseRequest(BaseModel):
     message: str = Field(..., description="User's message or query")
     conversation_id: Optional[str] = Field(None, description="Optional conversation ID")
     user_id: Optional[str] = Field(None, description="Optional user ID")
+    llm_provider: Optional[str] = Field("ollama", description="LLM provider to use")
     algorithm: Optional[str] = Field(None, description="RecBole algorithm to use")
 
 
@@ -61,6 +63,7 @@ class BrowseResponse(BaseModel):
 class ExtractRequest(BaseModel):
     message: str
     user_id: Optional[str] = None
+    llm_provider: Optional[str] = Field("ollama")
 
 
 class ExtractResponse(BaseModel):
@@ -86,6 +89,7 @@ class RespondRequest(BaseModel):
     conversation_id: str
     user_id: str
     product_details: List[Dict[str, Any]]
+    llm_provider: Optional[str] = Field("ollama")
     metadata: Optional[Dict[str, Any]] = None
 
 
@@ -124,6 +128,7 @@ class ExplainRequest(BaseModel):
     item_id: str
     conversation_id: str
     user_id: str
+    llm_provider: Optional[str] = Field("ollama")
     message: Optional[str] = "Why was this recommended?"
 
 

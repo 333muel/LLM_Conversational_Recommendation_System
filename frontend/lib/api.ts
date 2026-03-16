@@ -180,12 +180,18 @@ export async function submitFeedback(
 export async function explainRecommendation(
   asin: string, 
   conversationId: string, 
-  userId: string
+  userId: string,
+  llmProvider?: string
 ): Promise<ExplainResponse> {
   const response = await fetch(`${API_BASE_URL}/api/conversation/explain`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ item_id: asin, conversation_id: conversationId, user_id: userId }),
+    body: JSON.stringify({ 
+      item_id: asin, 
+      conversation_id: conversationId, 
+      user_id: userId,
+      llm_provider: llmProvider
+    }),
   });
   if (!response.ok) throw new Error("Failed to explain recommendation");
   return response.json();

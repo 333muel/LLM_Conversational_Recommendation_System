@@ -3,7 +3,6 @@ import json
 from typing import Dict, Any, List, Optional
 from apps.core.agent.workflow.nodes.BaseNode import BaseNode
 from apps.core.agent.workflow.state.RecommendationState import RecommendationState
-from apps.core.llm.Ollama import OllamaClient
 from apps.database.Mongo import UserProfileRepository
 from apps.config.Setting import settings
 from apps.config.Tracing import get_logger
@@ -31,13 +30,14 @@ If a preference is not explicitly mentioned or cannot be inferred, keep the exis
 Return ONLY the JSON object. Do not include any other text."""
 
     def __init__(self, model: Optional[str] = None):
-        self.client = OllamaClient(model=model or settings.ollama_model)
+        self._model = model
 
     async def execute(self, state: RecommendationState) -> Dict[str, Any]:
         """Analyze message and update user profile in MongoDB."""
         try:
             user_id = state.get("user_id") or "AFNT6ZJCYQN3WDIKUSWHJDXNND2Q"
             user_message = state.get("user_message", "")
+            llm_provider = state.get("llm_provider", "ollama")
             
             if not user_message:
                 return {}
@@ -47,13 +47,16 @@ Return ONLY the JSON object. Do not include any other text."""
             current_preferences = profile.get("preferences", {}) if profile else {}
             
             # 2. Analyze using LLM
-            logger.info(f"Analyzing user preferences for user_id: {user_id}")
+            logger.info(f"Analyzing user preferences for user_id: {user_id} using {llm_provider}")
             analysis_prompt = self.SYSTEM_PROMPT.format(
                 current_preferences=json.dumps(current_preferences),
                 user_message=user_message
             )
             
-            response = await self.client.generate(
+            from apps.core.llm import get_llm_client
+            client = get_llm_client(provider=llm_provider, model=self._model)
+            
+            response = await client.generate(
                 prompt=analysis_prompt,
                 system_prompt="You are a helpful user profile analyst. Return ONLY JSON."
             )

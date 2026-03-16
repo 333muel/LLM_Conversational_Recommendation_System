@@ -1,5 +1,5 @@
 import anyio
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from apps.core.agent.workflow.nodes.BaseNode import BaseNode
 from apps.core.agent.workflow.state.RecommendationState import RecommendationState
 from apps.core.agent.workflow.tools.RecBoleModel import get_recbole_engine
@@ -13,8 +13,8 @@ logger = get_logger(__name__)
 class BrowseItemNode(BaseNode):
     """Enhanced node for discovery-based browsing with AI query processing."""
     
-    def __init__(self):
-        self.query_processor = QueryProcessor()
+    def __init__(self, provider: Optional[str] = "ollama"):
+        self._provider = provider
 
     async def execute(self, state: RecommendationState) -> Dict[str, Any]:
         """Execute the enhanced discovery logic."""
@@ -22,6 +22,7 @@ class BrowseItemNode(BaseNode):
             user_id = state.get("user_id") or "AFNT6ZJCYQN3WDIKUSWHJDXNND2Q"
             user_message = state.get("user_message", "")
             algorithm = state.get("algorithm")
+            llm_provider = state.get("llm_provider", self._provider)
             
             # Fast Path: If query is empty or just generic recommendation request, skip AI processing
             is_generic = not user_message or user_message.lower().strip() in ["show me some recommendations", "recommend some products", "browse"]
@@ -62,7 +63,8 @@ class BrowseItemNode(BaseNode):
                 }
 
             # 1. AI Query Processing
-            constraints = await self.query_processor.process(user_message)
+            processor = QueryProcessor(provider=llm_provider)
+            constraints = await processor.process(user_message)
             
             # 2. Get large candidate set from RecBole (Top 100)
             engine = get_recbole_engine(algorithm=algorithm)

@@ -60,6 +60,7 @@ export interface RecommendationRequest {
   user_id?: string;
   top_k?: number;
   model?: string;
+  llm_provider?: string;
   algorithm?: string;
 }
 
@@ -67,6 +68,7 @@ export interface BrowseRequest {
   message: string;
   conversation_id?: string;
   user_id?: string;
+  llm_provider?: string;
   algorithm?: string;
 }
 
@@ -83,6 +85,7 @@ export interface BrowseResponse {
 export interface ExtractRequest {
   message: string;
   user_id?: string;
+  llm_provider?: string;
 }
 
 export interface ExtractResponse {
@@ -108,6 +111,7 @@ export interface RespondRequest {
   conversation_id: string;
   user_id: string;
   product_details: any[];
+  llm_provider?: string;
   metadata?: Record<string, any>;
 }
 
@@ -122,6 +126,7 @@ export interface ExplainRequest {
   conversation_id: string;
   user_id: string;
   message?: string;
+  llm_provider?: string;
 }
 
 export interface ExplainResponse {

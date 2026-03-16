@@ -1,6 +1,5 @@
 import json
 from typing import Dict, Any, Optional
-from apps.core.llm.Ollama import OllamaClient
 from apps.config.Setting import settings
 from apps.config.Tracing import get_logger
 
@@ -28,14 +27,18 @@ Output: {"category": "Cleansers", "min_rating": 4.5, "intent": "highly rated cle
 
 Return ONLY the JSON object. Do not include any other text."""
 
-    def __init__(self, model: Optional[str] = None):
-        self.client = OllamaClient(model=model or settings.ollama_model)
+    def __init__(self, model: Optional[str] = None, provider: Optional[str] = "ollama"):
+        self._model = model
+        self._provider = provider
 
     async def process(self, user_message: str) -> Dict[str, Any]:
         """Process user message into structured constraints."""
         try:
-            logger.info(f"Processing query for constraints: {user_message}")
-            response = await self.client.generate(
+            logger.info(f"Processing query for constraints: {user_message} using {self._provider}")
+            from apps.core.llm import get_llm_client
+            client = get_llm_client(provider=self._provider, model=self._model)
+            
+            response = await client.generate(
                 prompt=f"User request: \"{user_message}\"",
                 system_prompt=self.SYSTEM_PROMPT
             )

@@ -9,6 +9,7 @@ import { Star, ThumbsUp, ThumbsDown, Info, X } from "lucide-react";
 import { useState } from "react";
 import { submitFeedback, explainRecommendation } from "@/lib/api";
 import { useUser } from "@/contexts/UserContext";
+import { useChat } from "@/contexts/ChatContext";
 
 interface ProductCardProps {
   product: Product;
@@ -17,6 +18,7 @@ interface ProductCardProps {
 
 export function ProductCard({ product, conversationId }: ProductCardProps) {
   const { userId } = useUser();
+  const { llmProvider } = useChat();
   const [feedback, setFeedback] = useState<"like" | "dislike" | null>(null);
   const [explanation, setExplanation] = useState<ExplainResponse | null>(null);
   const [loadingExplain, setLoadingExplain] = useState(false);
@@ -43,7 +45,7 @@ export function ProductCard({ product, conversationId }: ProductCardProps) {
     setLoadingExplain(true);
     setShowExplain(true);
     try {
-      const res = await explainRecommendation(product.asin, conversationId, userId);
+      const res = await explainRecommendation(product.asin, conversationId, userId, llmProvider);
       setExplanation(res);
     } catch (err) {
       console.error("Failed to get explanation", err);

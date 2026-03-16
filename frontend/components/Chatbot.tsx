@@ -20,7 +20,15 @@ import { ChatMessage, Recommendation } from "@/lib/types";
 import Link from "next/link";
 
 export function Chatbot() {
-  const { isOpen, setIsOpen, initialMessage, setInitialMessage, agentType, setAgentType } = useChat();
+  const { 
+    isOpen, 
+    setIsOpen, 
+    initialMessage, 
+    setInitialMessage, 
+    agentType, 
+    setAgentType,
+    llmProvider
+  } = useChat();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -72,6 +80,7 @@ export function Chatbot() {
           conversation_id: conversationId,
           user_id: userId,
           top_k: 5,
+          llm_provider: llmProvider,
         });
         response = {
           response: baselineResult.response,
@@ -84,6 +93,7 @@ export function Chatbot() {
           conversation_id: conversationId,
           user_id: userId,
           top_k: 5,
+          llm_provider: llmProvider,
         });
       }
 

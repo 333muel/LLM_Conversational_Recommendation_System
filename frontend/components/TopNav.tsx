@@ -14,7 +14,7 @@ interface TopNavProps {
 
 export function TopNav({ showAskRow = false, onAskSubmit }: TopNavProps) {
   const { userId, logout, isAuthenticated } = useUser();
-  const { openChat } = useChat();
+  const { openChat, llmProvider, setLlmProvider } = useChat();
   const router = useRouter();
   const [askInput, setAskInput] = useState("");
 
@@ -39,6 +39,28 @@ export function TopNav({ showAskRow = false, onAskSubmit }: TopNavProps) {
           </Link>
 
           <div className="flex items-center gap-2.5 flex-wrap justify-end">
+            <div className="flex items-center bg-[var(--panel2)] rounded-full p-1 border border-[var(--line)]">
+              <button
+                onClick={() => setLlmProvider("ollama")}
+                className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all ${
+                  llmProvider === "ollama"
+                    ? "bg-white text-[var(--text)] shadow-sm"
+                    : "text-[var(--muted-foreground)] hover:text-[var(--text)]"
+                }`}
+              >
+                Ollama
+              </button>
+              <button
+                onClick={() => setLlmProvider("dashscope")}
+                className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all ${
+                  llmProvider === "dashscope"
+                    ? "bg-white text-[var(--text)] shadow-sm"
+                    : "text-[var(--muted-foreground)] hover:text-[var(--text)]"
+                }`}
+              >
+                Qwen
+              </button>
+            </div>
             {isAuthenticated ? (
               <>
                 <Link href="/saved" className="border border-[var(--line)] bg-white/90 px-3 py-2 rounded-full text-[13px] text-[#1f2937] transition-colors hover:bg-[var(--panel2)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.35)]">

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { useUser } from "@/contexts/UserContext";
+import { useChat } from "@/contexts/ChatContext";
 import { fetchRecommendations } from "@/lib/api";
 import { ChatMessage, Recommendation } from "@/lib/types";
 import Link from "next/link";
@@ -27,6 +28,7 @@ export function ChatSidebar({
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
   const { userId } = useUser();
+  const { llmProvider } = useChat();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -77,6 +79,7 @@ export function ChatSidebar({
         conversation_id: conversationId,
         user_id: userId,
         top_k: 5,
+        llm_provider: llmProvider,
       });
 
       if (response.conversation_id) {
