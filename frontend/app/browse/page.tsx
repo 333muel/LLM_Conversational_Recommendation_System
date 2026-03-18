@@ -27,7 +27,9 @@ function BrowseContent() {
   const searchParams = useSearchParams();
   const query = searchParams.get("q");
   
-  const [products, setProducts] = useState<Product[]>([]);
+  const [productState, setProductState] = useState<{ display: Product[]; buffer: Product[] }>({ display: [], buffer: [] });
+  const [dislikedIds, setDislikedIds] = useState<Set<string>>(new Set());
+  const products = productState.display;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
@@ -57,30 +59,23 @@ function BrowseContent() {
 
       // Define a function to trigger filtering and response once we have constraints
       const runFilterAndRespond = (extractedConstraints: any) => {
-        // Filter call (Fast)
+        // Filter call - request 25 for buffer (20 displayed + 5 buffer)
         filterProducts({
           constraints: extractedConstraints,
-          user_id: userId
+          user_id: userId,
+          limit: 25
         }).then(filterRes => {
           if (filterRes.success) {
-            const formattedProducts: Product[] = filterRes.products.map(p => ({
-              asin: p.item_id,
-              product_title: p.title,
-              product_description: p.description,
-              product_avg_rating: p.rating,
-              product_price: p.price,
-              product_categories: p.categories,
-              product_main_category: p.main_category,
-              product_image_url: p.image
-            }));
-            setProducts(formattedProducts);
+            const allFormatted: Product[] = filterRes.products.map(toProduct);
+            setProductState({ display: allFormatted.slice(0, 20), buffer: allFormatted.slice(20, 25) });
+            setDislikedIds(new Set());
             
-            // Generate response once products are ready
+            // Generate response once products are ready (use first 20 for response text)
             respondToProducts({
               message: userMessage,
               conversation_id: currentConvId,
               user_id: userId,
-              product_details: filterRes.products,
+              product_details: filterRes.products.slice(0, 20),
               llm_provider: llmProvider,
               metadata: filterRes.metadata
             }).then(respondRes => {
@@ -121,6 +116,61 @@ function BrowseContent() {
     loadDiscovery();
   };
 
+  const toProduct = (p: { item_id: string; title?: string; description?: string; rating?: number; price?: string; categories?: string; main_category?: string; image?: string }): Product => ({
+    asin: p.item_id,
+    product_title: p.title,
+    product_description: p.description,
+    product_avg_rating: p.rating,
+    product_price: p.price,
+    product_categories: p.categories,
+    product_main_category: p.main_category,
+    product_image_url: p.image
+  });
+
+  const handleDislike = async (productId: string) => {
+    if (!userId || !conversationId) return;
+    const newDisliked = new Set([...dislikedIds, productId]);
+    setDislikedIds(newDisliked);
+
+    setProductState((prev) => {
+      const dislikedIndex = prev.display.findIndex((p) => p.asin === productId);
+      if (dislikedIndex === -1) return prev;
+
+      if (prev.buffer.length > 0) {
+        const [replacement, ...restBuffer] = prev.buffer;
+        const newDisplay = [...prev.display];
+        newDisplay[dislikedIndex] = replacement;
+        return { display: newDisplay, buffer: restBuffer };
+      }
+      // Buffer empty - refill in background, then replace in place
+      const idxToReplace = dislikedIndex;
+      filterProducts({
+        constraints,
+        user_id: userId,
+        exclude_item_ids: Array.from(newDisliked),
+        limit: 5
+      })
+        .then((filterRes) => {
+          if (filterRes.success && filterRes.products.length > 0) {
+            const newProducts = filterRes.products.map(toProduct);
+            const [first, ...rest] = newProducts;
+            setProductState((p) => {
+              const newDisplay = [...p.display];
+              newDisplay.splice(idxToReplace, 0, first);
+              return {
+                display: newDisplay,
+                buffer: rest.slice(0, 4)
+              };
+            });
+          }
+        })
+        .catch(console.error);
+      // Temporarily remove until replacement arrives
+      const filtered = prev.display.filter((p) => p.asin !== productId);
+      return { display: filtered, buffer: prev.buffer };
+    });
+  };
+
   const handleRecommendationsUpdate = (recs: Recommendation[]) => {
     const formattedProducts: Product[] = recs.map(p => ({
       asin: p.item_id,
@@ -132,7 +182,7 @@ function BrowseContent() {
       product_main_category: p.main_category || "",
       product_image_url: p.image || ""
     }));
-    setProducts(formattedProducts);
+    setProductState({ display: formattedProducts, buffer: [] });
   };
 
   if (!isAuthenticated) {
@@ -222,6 +272,7 @@ function BrowseContent() {
                         key={product.asin} 
                         product={product} 
                         conversationId={conversationId}
+                        onDislike={handleDislike}
                       />
                     ))}
                   </div>
@@ -236,6 +287,7 @@ function BrowseContent() {
             quickChips={QUICK_CHIPS}
             initialConversationId={conversationId}
             onRecommendationsUpdate={handleRecommendationsUpdate}
+            hideProductCards
           />
         </div>
       </main>

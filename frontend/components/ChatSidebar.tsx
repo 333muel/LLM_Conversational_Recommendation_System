@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -15,13 +16,15 @@ interface ChatSidebarProps {
   quickChips?: Array<{ text: string; label: string }>;
   initialConversationId?: string;
   onRecommendationsUpdate?: (recommendations: Recommendation[]) => void;
+  hideProductCards?: boolean;
 }
 
 export function ChatSidebar({ 
   initialMessage, 
   quickChips = [], 
   initialConversationId,
-  onRecommendationsUpdate
+  onRecommendationsUpdate,
+  hideProductCards = false
 }: ChatSidebarProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -160,14 +163,29 @@ export function ChatSidebar({
           {messages.map((message) => (
             <div
               key={message.id}
-              className={`max-w-[92%] p-2.5 rounded-[14px] text-[13px] leading-[1.35] border ${
+              className={`max-w-[92%] p-3 rounded-[14px] text-[13px] leading-[1.5] border ${
                 message.role === "user"
                   ? "ml-auto bg-[rgba(45,212,191,.14)] border-[rgba(45,212,191,.28)]"
                   : "mr-auto bg-[rgba(241,245,249,.85)] border-[rgba(228,234,242,.9)]"
               }`}
             >
-              {message.content}
-              {message.recommendations && message.recommendations.length > 0 && (
+              {message.role === "assistant" ? (
+                <div className="chat-content [&_p]:mb-1.5 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:list-inside [&_ul]:my-2 [&_ul]:space-y-0.5 [&_li]:text-[12.5px] [&_strong]:font-bold [&_strong]:text-[var(--text)]">
+                  <ReactMarkdown
+                    components={{
+                      p: ({ children }) => <p className="mb-1.5 last:mb-0">{children}</p>,
+                      ul: ({ children }) => <ul className="list-disc list-inside space-y-0.5 my-2">{children}</ul>,
+                      li: ({ children }) => <li className="text-[12.5px]">{children}</li>,
+                      strong: ({ children }) => <strong className="font-bold text-[var(--text)]">{children}</strong>,
+                    }}
+                  >
+                    {message.content}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <span>{message.content}</span>
+              )}
+              {!hideProductCards && message.recommendations && message.recommendations.length > 0 && (
                 <div className="mt-2 space-y-2">
                   {message.recommendations.map((rec) => (
                     <Link key={rec.item_id} href={`/products/${rec.item_id}`} className="block">

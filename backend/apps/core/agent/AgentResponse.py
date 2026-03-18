@@ -55,13 +55,14 @@ class RecommendationAgent:
                 # Clear feedback after retrieving it for this turn's context
                 ConversationRepository.clear_pending_feedback(conversation_id)
 
+            _model = model or (settings.dashscope_model if llm_provider == "dashscope" else settings.ollama_model)
             initial_state: RecommendationState = {
                 "user_message": user_message + (f"\n{feedback_context}" if feedback_context else ""),
                 "constraints": None,
                 "user_id": user_id,
                 "top_k": top_k,
                 "algorithm": algorithm,
-                "model": model,
+                "model": _model,
                 "llm_provider": llm_provider,
                 "raw_recommendations": [],
                 "product_details": [],
@@ -153,13 +154,14 @@ class RecommendationAgent:
                 # Clear feedback after retrieving it for this turn's context
                 ConversationRepository.clear_pending_feedback(conversation_id)
 
+            _model = settings.dashscope_model if llm_provider == "dashscope" else settings.ollama_model
             initial_state: RecommendationState = {
                 "user_message": user_message + (f"\n{feedback_context}" if feedback_context else ""),
                 "constraints": None,
                 "user_id": user_id,
                 "top_k": 20,
                 "algorithm": algorithm,
-                "model": settings.ollama_model,
+                "model": _model,
                 "llm_provider": llm_provider,
                 "raw_recommendations": [],
                 "product_details": [],
@@ -248,13 +250,14 @@ class RecommendationAgent:
                 # Clear feedback after retrieving it for this turn's context
                 ConversationRepository.clear_pending_feedback(conversation_id)
 
+            _model = model or (settings.dashscope_model if llm_provider == "dashscope" else settings.ollama_model)
             initial_state: RecommendationState = {
                 "user_message": user_message + (f"\n{feedback_context}" if feedback_context else ""),
                 "constraints": None,
                 "user_id": user_id,
                 "top_k": top_k or 20,
                 "algorithm": None,
-                "model": model or settings.ollama_model,
+                "model": _model,
                 "llm_provider": llm_provider,
                 "raw_recommendations": [],
                 "product_details": [],
@@ -460,7 +463,9 @@ JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "p
         self, 
         constraints: Dict[str, Any], 
         user_id: str, 
-        algorithm: Optional[str] = None
+        algorithm: Optional[str] = None,
+        exclude_item_ids: Optional[List[str]] = None,
+        limit: int = 25
     ) -> Dict[str, Any]:
         """Filter products based on constraints and RecBole candidates (Async-safe)."""
         from apps.core.agent.workflow.tools.RecBoleModel import get_recbole_engine
@@ -474,19 +479,22 @@ JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "p
             candidate_asins = [c["item_id"] for c in candidates]
             
             # Filter - MongoDB calls are sync, run in thread too
-            matching_products = await anyio.to_thread.run_sync(
-                ProductRepository.filter_products,
-                candidate_asins,
-                constraints.get("category"),
-                constraints.get("max_price"),
-                constraints.get("min_rating"),
-                constraints.get("keywords")
-            )
+            def _filter():
+                return ProductRepository.filter_products(
+                    candidate_asins,
+                    constraints.get("category"),
+                    constraints.get("max_price"),
+                    constraints.get("min_rating"),
+                    constraints.get("keywords"),
+                    exclude_item_ids=exclude_item_ids
+                )
+            matching_products = await anyio.to_thread.run_sync(_filter)
             
             # Fallback logic
-            final_products = matching_products[:20]
+            final_products = matching_products[:limit]
             metadata = {"matched_count": len(matching_products), "source": "recbole_filtered"}
             
+            exclude_set = set(exclude_item_ids or [])
             if len(final_products) < 5 and constraints.get("category"):
                 db_fallback = await anyio.to_thread.run_sync(
                     ProductRepository.get_top_rated_by_category,
@@ -495,12 +503,12 @@ JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "p
                 )
                 existing_asins = {p["asin"] for p in final_products}
                 for p in db_fallback:
-                    if p["asin"] not in existing_asins:
+                    if p["asin"] not in existing_asins and p["asin"] not in exclude_set:
                         final_products.append(p)
                         existing_asins.add(p["asin"])
                 metadata["source"] = "mixed_db_fallback"
 
-            if len(final_products) < 20:
+            if len(final_products) < limit:
                 existing_asins = {p["asin"] for p in final_products}
                 full_candidates = await anyio.to_thread.run_sync(
                     ProductRepository.get_products_by_ids,
@@ -508,10 +516,11 @@ JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "p
                 )
                 candidate_map = {p["asin"]: p for p in full_candidates}
                 for asin in candidate_asins:
-                    if asin not in existing_asins and asin in candidate_map:
+                    if asin not in existing_asins and asin not in exclude_set and asin in candidate_map:
                         final_products.append(candidate_map[asin])
                         existing_asins.add(asin)
-                    if len(final_products) >= 20: break
+                    if len(final_products) >= limit:
+                        break
             
             # Format
             formatted = []
@@ -551,13 +560,14 @@ JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "p
             session_start_time = ConversationRepository.get_conversation_created_at(conversation_id) or datetime.utcnow()
             current_message = {"role": "user", "content": user_message}
             
+            _model = settings.dashscope_model if llm_provider == "dashscope" else settings.ollama_model
             state: RecommendationState = {
                 "user_message": user_message,
                 "constraints": None,
                 "user_id": user_id,
                 "top_k": len(product_details),
                 "algorithm": None,
-                "model": settings.ollama_model,
+                "model": _model,
                 "llm_provider": llm_provider,
                 "raw_recommendations": [],
                 "product_details": product_details,

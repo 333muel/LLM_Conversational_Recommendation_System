@@ -14,9 +14,10 @@ import { useChat } from "@/contexts/ChatContext";
 interface ProductCardProps {
   product: Product;
   conversationId?: string;
+  onDislike?: (productId: string) => void;
 }
 
-export function ProductCard({ product, conversationId }: ProductCardProps) {
+export function ProductCard({ product, conversationId, onDislike }: ProductCardProps) {
   const { userId } = useUser();
   const { llmProvider } = useChat();
   const [feedback, setFeedback] = useState<"like" | "dislike" | null>(null);
@@ -32,6 +33,9 @@ export function ProductCard({ product, conversationId }: ProductCardProps) {
     try {
       await submitFeedback(product.asin, conversationId, userId, type);
       setFeedback(type);
+      if (type === "dislike" && onDislike) {
+        onDislike(product.asin);
+      }
     } catch (err) {
       console.error("Failed to submit feedback", err);
     }

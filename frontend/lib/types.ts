@@ -98,6 +98,8 @@ export interface FilterRequest {
   constraints: Record<string, any>;
   user_id?: string;
   algorithm?: string;
+  exclude_item_ids?: string[];
+  limit?: number;
 }
 
 export interface FilterResponse {

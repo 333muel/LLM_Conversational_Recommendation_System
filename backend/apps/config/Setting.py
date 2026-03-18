@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen3:latest")
     
     # LLM Configuration (DashScope / Qwen)
+    # API keys differ by region. Use China URL for China keys, International for Singapore/US keys.
+    # China: https://dashscope.aliyuncs.com/compatible-mode/v1
+    # Singapore: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+    # US: https://dashscope-us.aliyuncs.com/compatible-mode/v1
     dashscope_api_key: str = os.getenv("DASHSCOPE_API_KEY", "")
     dashscope_base_url: str = os.getenv("DASHSCOPE_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
     dashscope_model: str = os.getenv("DASHSCOPE_MODEL", "qwen3.5-35b-a3b")

@@ -80,7 +80,8 @@ class ProductRepository:
         category: Optional[str] = None,
         max_price: Optional[float] = None,
         min_rating: Optional[float] = None,
-        keywords: Optional[List[str]] = None
+        keywords: Optional[List[str]] = None,
+        exclude_item_ids: Optional[List[str]] = None
     ) -> List[Dict]:
         """
         Filter products by additional constraints using Text Index.
@@ -101,7 +102,13 @@ class ProductRepository:
 
         query = {}
         if product_ids is not None:
-            query["asin"] = {"$in": product_ids}
+            candidate_set = product_ids
+            if exclude_item_ids:
+                candidate_set = [p for p in product_ids if p not in exclude_item_ids]
+            if candidate_set:
+                query["asin"] = {"$in": candidate_set}
+            else:
+                return []
         
         # Combine category and keywords for text search
         search_terms = []
@@ -129,6 +136,11 @@ class ProductRepository:
         else:
             results = list(collection.find(query))
         
+        # Post-process: exclude_item_ids (for full-DB search when product_ids is None)
+        if exclude_item_ids:
+            exclude_set = set(exclude_item_ids)
+            results = [p for p in results if p.get("asin") not in exclude_set]
+
         # Post-process price filtering in Python because it's a string in DB
         if max_price is not None:
             filtered_results = []

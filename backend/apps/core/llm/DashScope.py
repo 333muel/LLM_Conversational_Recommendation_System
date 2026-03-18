@@ -37,7 +37,6 @@ class DashScopeClient:
                 "model": self.model,
                 "messages": messages,
                 "stream": False,
-                "extra_body": {"enable_thinking": True},
                 **kwargs
             }
             

@@ -76,6 +76,8 @@ class FilterRequest(BaseModel):
     constraints: Dict[str, Any]
     user_id: Optional[str] = None
     algorithm: Optional[str] = None
+    exclude_item_ids: Optional[List[str]] = Field(None, description="Item IDs to exclude (e.g. disliked products)")
+    limit: Optional[int] = Field(None, ge=1, le=50, description="Max products to return (default 25 for buffer)")
 
 
 class FilterResponse(BaseModel):

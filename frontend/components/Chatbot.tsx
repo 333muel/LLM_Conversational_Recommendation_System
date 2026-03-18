@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { MessageCircle, Send, X, Star } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import { useChat } from "@/contexts/ChatContext";
@@ -137,26 +136,26 @@ export function Chatbot() {
 
   return (
     <>
-      {/* RecBole Assistant Button */}
+      {/* Assistant A Button (teal) */}
       <button
         onClick={() => {
           setAgentType("recbole");
           setIsOpen(true);
         }}
         className="fixed right-[18px] bottom-[18px] z-50 w-14 h-14 rounded-[18px] border border-[rgba(45,212,191,.45)] bg-[rgba(45,212,191,.22)] shadow-[var(--shadow2)] cursor-pointer flex items-center justify-center transition-all duration-150 hover:-translate-y-0.5 hover:bg-[rgba(45,212,191,.28)]"
-        aria-label="Open RecBole sales assistant"
+        aria-label="Open Assistant B"
       >
         <span className="text-xl">💬</span>
       </button>
 
-      {/* Baseline Assistant Button (Purple) */}
+      {/* Assistant B Button (purple) */}
       <button
         onClick={() => {
           setAgentType("baseline");
           setIsOpen(true);
         }}
         className="fixed right-[82px] bottom-[18px] z-50 w-14 h-14 rounded-[18px] border border-[rgba(167,139,250,.45)] bg-[rgba(167,139,250,.22)] shadow-[var(--shadow2)] cursor-pointer flex items-center justify-center transition-all duration-150 hover:-translate-y-0.5 hover:bg-[rgba(167,139,250,.28)]"
-        aria-label="Open Baseline sales assistant"
+        aria-label="Open Assistant A"
       >
         <span className="text-xl">💬</span>
       </button>
@@ -167,12 +166,10 @@ export function Chatbot() {
             <div className="flex items-center justify-between gap-2.5">
               <div>
                 <DrawerTitle className="text-sm font-extrabold">
-                  {agentType === "baseline" ? "Baseline AI Assistant" : "Digital Sales Assistant"}
+                  {agentType === "baseline" ? "Assistant A" : "Assistant B"}
                 </DrawerTitle>
                 <DrawerDescription className="text-[13px] text-[var(--muted-foreground)] leading-[1.45] mt-0.5">
-                  {agentType === "baseline" 
-                    ? "Direct MongoDB search assistant (No RecBole)" 
-                    : "AI-powered recommendation assistant using RecBole"}
+                  Product recommendation assistant
                 </DrawerDescription>
               </div>
               <Button
@@ -230,9 +227,6 @@ export function Chatbot() {
                                 </span>
                               </div>
                             </div>
-                            <Badge variant="outline" className="text-[11px] shrink-0 border border-[var(--line)]">
-                              Score: {rec.score.toFixed(2)}
-                            </Badge>
                           </div>
                         </Card>
                       </Link>

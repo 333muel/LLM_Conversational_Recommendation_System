@@ -157,7 +157,13 @@ async def filter_products(request: FilterRequest) -> FilterResponse:
     try:
         agent = get_recommendation_agent()
         user_id = request.user_id or "AFNT6ZJCYQN3WDIKUSWHJDXNND2Q"
-        result = await agent.filter_candidates(request.constraints, user_id, request.algorithm)
+        result = await agent.filter_candidates(
+            request.constraints,
+            user_id,
+            request.algorithm,
+            exclude_item_ids=request.exclude_item_ids,
+            limit=request.limit or 25
+        )
         return FilterResponse(**result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -21,7 +21,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [initialMessage, setInitialMessage] = useState<string | null>(null);
   const [agentType, setAgentType] = useState<"recbole" | "baseline">("recbole");
-  const [llmProvider, setLlmProvider] = useState<"ollama" | "dashscope">("ollama");
+  const [llmProvider, setLlmProvider] = useState<"ollama" | "dashscope">("dashscope");
 
   const openChat = (message?: string, type?: "recbole" | "baseline") => {
     if (message) {

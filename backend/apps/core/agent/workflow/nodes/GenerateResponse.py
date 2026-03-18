@@ -106,14 +106,17 @@ Based on the user's request, I have found the following top recommended products
 
 {top_products_text}{context_summary}
 
-Please provide a VERY CONCISE, friendly response (maximum 150 words total) that:
-1. Acknowledges the request.
-2. Briefly mentions the top 2-3 recommended products.
-3. Highlights ONE key selling point per product.
-4. Keeps descriptions short (1-2 sentences per product).
-5. Mentions price/rating only if particularly relevant.
+Please provide a VERY SHORT, friendly response (maximum 60 words total) that:
+1. Acknowledges the request in one sentence.
+2. Lists 2-3 top picks using bullet points (•) with ONE key point each.
+3. Use **bold** for product names. Keep each bullet to one short line.
+4. No long paragraphs. Be conversational but scannable.
 
-Format your response as a natural conversation. Be brief and focused. Do not repeat product details from the list."""
+Example format:
+• **Product A** – key benefit
+• **Product B** – key benefit
+
+Be brief and focused. Do not repeat full product details from the list."""
 
         return prompt
     
@@ -164,9 +167,12 @@ Format your response as a natural conversation. Be brief and focused. Do not rep
                 if msg.get("role") != "system":
                     chat_messages.append(msg)
             
-            # Generate response using LLM
+            # Generate response using LLM - use provider-specific model (state "model" may be wrong if from different provider)
             llm_provider = state.get("llm_provider", "ollama")
-            llm_model = model or (settings.dashscope_model if llm_provider == "dashscope" else settings.ollama_model)
+            if llm_provider == "dashscope":
+                llm_model = model if model and ":" not in model else settings.dashscope_model  # ":" indicates Ollama tag
+            else:
+                llm_model = model or settings.ollama_model
             logger.info(f"Generating AI response using provider: {llm_provider}, model: {llm_model}")
             
             from apps.core.llm import get_llm_client
