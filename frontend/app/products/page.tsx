@@ -149,7 +149,7 @@ export default function ProductsPage() {
             ) : (
               <div className="grid grid-cols-4 gap-4 max-[1020px]:grid-cols-3 max-[720px]:grid-cols-2" aria-label="Product grid">
                 {products.map((product) => (
-                  <ProductCard key={product.asin} product={product} />
+                  <ProductCard key={product.asin} product={product} hideActions />
                 ))}
               </div>
             )}

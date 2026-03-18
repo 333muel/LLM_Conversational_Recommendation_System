@@ -15,9 +15,10 @@ interface ProductCardProps {
   product: Product;
   conversationId?: string;
   onDislike?: (productId: string) => void;
+  hideActions?: boolean;
 }
 
-export function ProductCard({ product, conversationId, onDislike }: ProductCardProps) {
+export function ProductCard({ product, conversationId, onDislike, hideActions = false }: ProductCardProps) {
   const { userId } = useUser();
   const { llmProvider } = useChat();
   const [feedback, setFeedback] = useState<"like" | "dislike" | null>(null);
@@ -106,7 +107,8 @@ export function ProductCard({ product, conversationId, onDislike }: ProductCardP
           </div>
         </Link>
 
-        {/* Action Buttons */}
+        {/* Action Buttons (hidden when no conversation context, e.g. Featured today) */}
+        {!hideActions && (
         <div className="px-3 pb-3 pt-1 flex items-center justify-between border-t border-[var(--line)]/50 bg-slate-50/30">
           <div className="flex items-center gap-1.5">
             <button
@@ -141,6 +143,7 @@ export function ProductCard({ product, conversationId, onDislike }: ProductCardP
             Tell me more
           </button>
         </div>
+        )}
       </Card>
 
       {/* Explanation Modal Overlay */}
