@@ -1,5 +1,4 @@
 import json
-import os
 from datetime import datetime
 from typing import Any, Dict
 from pathlib import Path
@@ -33,10 +32,12 @@ class ConversationLogger:
             date_str = now.strftime("%Y-%m-%d")
             time_str = now.strftime("%H-%M-%S-%f")
             
-            # Define log directory: backend/logs/conversations
+            # Log directory: backend/logs (relative to docker-compose project root)
+            # In Docker: /app/logs (mounted from ./backend/logs)
+            # Locally: backend/logs
             current_file = Path(__file__).resolve()
-            project_root = current_file.parent.parent.parent.parent.parent.parent
-            log_dir = project_root / "logs" / "conversations"
+            backend_root = current_file.parent.parent.parent.parent.parent.parent
+            log_dir = backend_root / "logs"
             
             # Ensure log directory exists
             log_dir.mkdir(parents=True, exist_ok=True)

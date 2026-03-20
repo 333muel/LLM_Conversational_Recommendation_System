@@ -21,6 +21,7 @@ services:
     volumes:
       - ./data:/data
       - ./checkpoints:/checkpoints
+      - ./backend/logs:/app/logs
     depends_on:
       - mongodb
     extra_hosts:
