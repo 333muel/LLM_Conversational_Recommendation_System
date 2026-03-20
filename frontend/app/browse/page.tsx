@@ -288,6 +288,7 @@ function BrowseContent() {
             initialConversationId={conversationId}
             onRecommendationsUpdate={handleRecommendationsUpdate}
             hideProductCards
+            topK={20}
           />
         </div>
       </main>

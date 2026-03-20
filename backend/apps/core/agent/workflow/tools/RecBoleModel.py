@@ -156,28 +156,24 @@ class RecBoleRecommendationEngine:
         """
         try:
             # RecBole dataset structure:
-            # - field2id_token["user_id"] is a list where index=token, value=user_id string
-            # - field2token_id["user_id"] is a dict mapping token -> internal_id
+            # - field2token_id["user_id"] maps user_id string -> internal_id (use this for lookup)
+            # - field2id_token["user_id"] is np.ndarray: index -> token (no .index() on numpy!)
             # - Internal IDs are 1-indexed (1, 2, 3, ...)
             field2id_token = self.dataset.field2id_token
             field2token_id = self.dataset.field2token_id
             
-            # Find user_id in the token list
-            user_token = None
-            user_id_list = field2id_token["user_id"]
-            
-            # field2id_token["user_id"] is a list, find the index (token) of this user_id
-            try:
-                if user_id in user_id_list:
-                    user_token = user_id_list.index(user_id)
-                else:
-                    user_token = None
-            except (ValueError, AttributeError, TypeError):
+            # Look up user_id via field2token_id (token string -> internal id)
+            # Do NOT use field2id_token.index() - it's a numpy array, has no .index() method
+            token_to_id = field2token_id.get("user_id") if field2token_id else None
+            if isinstance(token_to_id, dict):
+                user_token = token_to_id.get(user_id)
+            else:
                 user_token = None
             
             if user_token is None:
                 logger.warning(f"User ID {user_id} not found in filtered dataset, using first available user")
                 # Get first user from filtered dataset (token 1, skip token 0 which is padding)
+                user_id_list = field2id_token["user_id"]
                 if len(user_id_list) > 1:
                     user_id = user_id_list[1]  # Get the actual user_id string
                     user_token = 1
@@ -186,18 +182,8 @@ class RecBoleRecommendationEngine:
                     logger.error("No users found in dataset")
                     return []
             
-            # Convert token to internal ID (RecBole uses 1-indexed internal IDs)
-            # field2token_id["user_id"] maps token -> internal_id
-            if "user_id" in field2token_id:
-                token_to_id = field2token_id["user_id"]
-                if isinstance(token_to_id, dict):
-                    user_id_internal = token_to_id.get(user_token, user_token)
-                else:
-                    # If it's a list/array, token is the index
-                    user_id_internal = user_token
-            else:
-                # Token is the internal ID directly (1-indexed)
-                user_id_internal = user_token
+            # user_token from field2token_id is already the internal ID (1-indexed)
+            user_id_internal = user_token
             
             logger.info(f"User mapping: user_id={user_id}, token={user_token}, internal_id={user_id_internal}")
             

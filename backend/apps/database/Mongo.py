@@ -318,6 +318,30 @@ class ConversationRepository:
             {"$unset": {"pending_feedback": ""}}
         )
 
+    @classmethod
+    def save_last_recommended(cls, conversation_id: str, item_ids: List[str]) -> None:
+        """Store last recommended item IDs for regenerate/diversity logic."""
+        if not item_ids:
+            return
+        collection = cls.get_collection()
+        collection.update_one(
+            {"conversation_id": conversation_id},
+            {
+                "$set": {
+                    "last_recommended_item_ids": item_ids,
+                    "updated_at": datetime.utcnow()
+                }
+            },
+            upsert=True
+        )
+
+    @classmethod
+    def get_last_recommended(cls, conversation_id: str) -> List[str]:
+        """Get last recommended item IDs for excluding on regenerate."""
+        collection = cls.get_collection()
+        doc = collection.find_one({"conversation_id": conversation_id})
+        return doc.get("last_recommended_item_ids", []) if doc else []
+
 
 class UserProfileRepository:
     """Repository for user profiles and preferences."""

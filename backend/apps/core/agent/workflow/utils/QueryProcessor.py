@@ -19,6 +19,7 @@ Output ONLY a valid JSON object with the following optional keys:
 - "min_rating": (float) Minimum rating if mentioned.
 - "keywords": (list of strings) Key features, ingredients, or brand names mentioned (e.g., "fragrance-free", "sensitive skin", "vitamin c", "CeraVe", "Neutrogena").
 - "intent": (string) Short summary of what the user is looking for.
+- "regenerate": (boolean) True if the user wants different/new recommendations (e.g., "regenerate", "show me different products", "something else", "more options", "other options").
 
 If a constraint is not mentioned, do not include it in the JSON.
 Example: "Find me a serum for sensitive skin under $30"
@@ -29,6 +30,9 @@ Output: {"category": "Cleansers", "min_rating": 4.5, "intent": "highly rated cle
 
 Example: "I want CeraVa moisturizer" (user likely meant CeraVe)
 Output: {"keywords": ["CeraVe"], "category": "Moisturizers", "intent": "CeraVe moisturizer"}
+
+Example: "Regenerate" or "Show me different products"
+Output: {"regenerate": true, "intent": "regenerate recommendations"}
 
 Return ONLY the JSON object. Do not include any other text."""
 

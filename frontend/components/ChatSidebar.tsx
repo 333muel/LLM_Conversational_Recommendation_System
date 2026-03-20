@@ -17,6 +17,8 @@ interface ChatSidebarProps {
   initialConversationId?: string;
   onRecommendationsUpdate?: (recommendations: Recommendation[]) => void;
   hideProductCards?: boolean;
+  /** Number of recommendations to fetch (default 5). Use 20 for browse page to regenerate full list. */
+  topK?: number;
 }
 
 export function ChatSidebar({ 
@@ -24,7 +26,8 @@ export function ChatSidebar({
   quickChips = [], 
   initialConversationId,
   onRecommendationsUpdate,
-  hideProductCards = false
+  hideProductCards = false,
+  topK = 5
 }: ChatSidebarProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -81,7 +84,7 @@ export function ChatSidebar({
         message: messageText,
         conversation_id: conversationId,
         user_id: userId,
-        top_k: 5,
+        top_k: topK,
         llm_provider: llmProvider,
       });
 

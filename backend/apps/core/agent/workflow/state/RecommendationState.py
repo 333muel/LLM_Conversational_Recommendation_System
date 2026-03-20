@@ -32,6 +32,9 @@ class RecommendationState(TypedDict):
     # Mode flag: 'recbole' or 'baseline'
     mode: Optional[str]
     
+    # Exclude these item IDs (e.g. when user asks to regenerate/different products)
+    exclude_item_ids: Optional[List[str]]
+    
     # Final AI-generated recommendation response
     final_response: Optional[str]
     

@@ -113,20 +113,6 @@ export default function ProductsPage() {
           )}
         </div>
 
-        <div className="flex items-baseline justify-between gap-3 mt-4 mb-2.5">
-          <h2 className="text-base m-0 tracking-wide font-semibold">Featured today</h2>
-          <div className="flex items-center gap-2">
-            <span className="text-[var(--muted-foreground)] text-[13px]">Browse, then ask the assistant to refine.</span>
-            <Button
-              onClick={() => router.push("/onboarding")}
-              variant="outline"
-              className="border border-[var(--line)] bg-white/90 px-3 py-2 rounded-full text-[13px] text-[var(--muted-foreground)] transition-colors hover:bg-[var(--panel2)] hover:text-[var(--text)] hover:border-[rgba(45,212,191,.35)]"
-            >
-              Get Started
-            </Button>
-          </div>
-        </div>
-
         {loading && (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>

@@ -41,6 +41,15 @@ class RecommendationAgent:
             history = ConversationRepository.get_history(conversation_id)
             session_start_time = ConversationRepository.get_conversation_created_at(conversation_id) or datetime.utcnow()
             
+            # --- Regenerate: exclude previously recommended items ---
+            _regenerate_keywords = ("regenerate", "different products", "something else", "more options", "other options", "show me different", "try again", "new recommendations", "different set", "new set", "give me a new", "replace the")
+            _msg_lower = user_message.lower().strip()
+            exclude_item_ids = None
+            if any(kw in _msg_lower for kw in _regenerate_keywords):
+                exclude_item_ids = ConversationRepository.get_last_recommended(conversation_id)
+                if exclude_item_ids:
+                    logger.info(f"Regenerate detected, excluding {len(exclude_item_ids)} previously recommended items")
+            
             # --- Feedback Injection ---
             # Get any pending thumbs up/down feedback from previous turns
             pending_feedback = ConversationRepository.get_pending_feedback(conversation_id)
@@ -68,6 +77,7 @@ class RecommendationAgent:
                 "product_details": [],
                 "product_metadata": None,
                 "final_response": None,
+                "exclude_item_ids": exclude_item_ids,
                 "messages": history + [{"role": "user", "content": user_message}]
             }
             
@@ -80,6 +90,9 @@ class RecommendationAgent:
             # Update history and save
             updated_messages = result.get("messages", [])
             ConversationRepository.save_history(conversation_id, updated_messages)
+            # Store last recommended for regenerate logic
+            if product_details:
+                ConversationRepository.save_last_recommended(conversation_id, [p.get("item_id") for p in product_details if p.get("item_id")])
             
             # --- Non-blocking Post-processing (Logging & Profile) ---
             if background_tasks:

@@ -1,6 +1,6 @@
 """Node for generating recommendations using RecBole."""
 import anyio
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Set
 from apps.core.agent.workflow.nodes.BaseNode import BaseNode
 from apps.core.agent.workflow.state.RecommendationState import RecommendationState
 from apps.core.agent.workflow.tools.RecBoleModel import get_recbole_engine
@@ -20,10 +20,12 @@ class RecommendItemNode(BaseNode):
     """
 
     def _has_refinement_constraints(self, constraints: Dict[str, Any]) -> bool:
-        """Check if constraints indicate a refinement request (brand, category, keywords)."""
+        """Check if constraints indicate a refinement request (brand, category, keywords, price, rating)."""
         return bool(
             constraints.get("keywords")
             or constraints.get("category")
+            or constraints.get("max_price") is not None
+            or constraints.get("min_rating") is not None
         )
 
     def _filter_by_constraints(
@@ -87,11 +89,13 @@ class RecommendItemNode(BaseNode):
             algorithm = state.get("algorithm")
             user_message = state.get("user_message", "")
             llm_provider = state.get("llm_provider", "ollama")
+            exclude_item_ids: List[str] = state.get("exclude_item_ids") or []
 
             logger.info(f"Generating recommendations for user: {user_id}, algorithm: {algorithm}, top_k: {top_k}")
 
             engine = get_recbole_engine(algorithm=algorithm)
-            context_k = max(top_k, settings.recommendation_context_k)
+            # Request extra items when excluding (for regenerate)
+            context_k = max(top_k + len(exclude_item_ids), settings.recommendation_context_k)
 
             recommendations = await anyio.to_thread.run_sync(
                 lambda: engine.recommend(
@@ -102,6 +106,12 @@ class RecommendItemNode(BaseNode):
             )
 
             logger.info(f"Generated {len(recommendations)} raw recommendations from RecBole")
+
+            # Exclude previously recommended items (regenerate flow)
+            if exclude_item_ids:
+                exclude_set: Set[str] = set(exclude_item_ids)
+                recommendations = [r for r in recommendations if r.get("item_id") not in exclude_set][:top_k]
+                logger.info(f"After excluding {len(exclude_set)} items (regenerate): {len(recommendations)} recommendations")
 
             # Extract constraints and filter when user refines (e.g., "Yes CeraVe")
             processor = QueryProcessor(provider=llm_provider)
