@@ -11,11 +11,13 @@ class QueryProcessor:
     SYSTEM_PROMPT = """You are a query parsing assistant for a beauty e-commerce store. 
 Your task is to extract structured constraints from a user's natural language request.
 
+IMPORTANT - Typo correction: If the user's text contains likely typos in brand names, ingredients, or product terms, correct them to the standard spelling in your output. Use your knowledge of common beauty brands and skincare terms. The corrected form will be used for database search, so accuracy matters.
+
 Output ONLY a valid JSON object with the following optional keys:
 - "category": (string) The specific product category (e.g., "Serums", "Cleansers", "Makeup", "Face", "Makeup, Face, Concealers & Neutralizers"). Use the most specific category mentioned.
 - "max_price": (float) Maximum budget if mentioned.
 - "min_rating": (float) Minimum rating if mentioned.
-- "keywords": (list of strings) Key features or ingredients mentioned (e.g., "fragrance-free", "sensitive skin", "vitamin c").
+- "keywords": (list of strings) Key features, ingredients, or brand names mentioned (e.g., "fragrance-free", "sensitive skin", "vitamin c", "CeraVe", "Neutrogena").
 - "intent": (string) Short summary of what the user is looking for.
 
 If a constraint is not mentioned, do not include it in the JSON.
@@ -24,6 +26,9 @@ Output: {"category": "Serums", "max_price": 30.0, "keywords": ["sensitive skin"]
 
 Example: "Show me some best rated cleansers"
 Output: {"category": "Cleansers", "min_rating": 4.5, "intent": "highly rated cleansers"}
+
+Example: "I want CeraVa moisturizer" (user likely meant CeraVe)
+Output: {"keywords": ["CeraVe"], "category": "Moisturizers", "intent": "CeraVe moisturizer"}
 
 Return ONLY the JSON object. Do not include any other text."""
 
