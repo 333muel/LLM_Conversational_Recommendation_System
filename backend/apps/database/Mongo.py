@@ -146,11 +146,12 @@ class ProductRepository:
             filtered_results = []
             for p in results:
                 try:
-                    price_str = p.get("product_price", "0").replace("$", "").strip()
-                    if float(price_str) <= max_price:
+                    price_str = (p.get("product_price") or "").replace("$", "").strip()
+                    if price_str and float(price_str) <= max_price:
                         filtered_results.append(p)
+                    # Products with no price are excluded when a budget filter is active
                 except (ValueError, TypeError):
-                    filtered_results.append(p)
+                    pass
             return filtered_results
             
         return results
@@ -341,6 +342,34 @@ class ConversationRepository:
         collection = cls.get_collection()
         doc = collection.find_one({"conversation_id": conversation_id})
         return doc.get("last_recommended_item_ids", []) if doc else []
+
+    @classmethod
+    def save_constraints(cls, conversation_id: str, constraints: Dict[str, Any]) -> None:
+        """Persist the active constraints for this conversation (cumulative filter state)."""
+        if not constraints:
+            return
+        collection = cls.get_collection()
+        collection.update_one(
+            {"conversation_id": conversation_id},
+            {"$set": {"active_constraints": constraints, "updated_at": datetime.utcnow()}},
+            upsert=True
+        )
+
+    @classmethod
+    def get_constraints(cls, conversation_id: str) -> Dict[str, Any]:
+        """Load the last known active constraints for this conversation."""
+        collection = cls.get_collection()
+        doc = collection.find_one({"conversation_id": conversation_id})
+        return doc.get("active_constraints", {}) if doc else {}
+
+    @classmethod
+    def clear_constraints(cls, conversation_id: str) -> None:
+        """Wipe active constraints (e.g. user said 'show all' / 'reset filters')."""
+        collection = cls.get_collection()
+        collection.update_one(
+            {"conversation_id": conversation_id},
+            {"$unset": {"active_constraints": ""}}
+        )
 
 
 class UserProfileRepository:

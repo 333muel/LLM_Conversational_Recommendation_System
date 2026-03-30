@@ -16,6 +16,8 @@ interface ChatSidebarProps {
   quickChips?: Array<{ text: string; label: string }>;
   initialConversationId?: string;
   onRecommendationsUpdate?: (recommendations: Recommendation[]) => void;
+  /** Called after each chat turn with the active merged constraints (for browse page badge sync). */
+  onConstraintsUpdate?: (constraints: Record<string, any>) => void;
   hideProductCards?: boolean;
   /** Number of recommendations to fetch (default 5). Use 20 for browse page to regenerate full list. */
   topK?: number;
@@ -26,6 +28,7 @@ export function ChatSidebar({
   quickChips = [], 
   initialConversationId,
   onRecommendationsUpdate,
+  onConstraintsUpdate,
   hideProductCards = false,
   topK = 5
 }: ChatSidebarProps) {
@@ -94,6 +97,10 @@ export function ChatSidebar({
 
       if (response.recommendations && onRecommendationsUpdate) {
         onRecommendationsUpdate(response.recommendations);
+      }
+
+      if (response.constraints && onConstraintsUpdate) {
+        onConstraintsUpdate(response.constraints);
       }
 
       const assistantMessage: ChatMessage = {
@@ -195,8 +202,17 @@ export function ChatSidebar({
                       <Card className="p-2 hover:bg-accent transition-colors">
                         <div className="text-xs font-medium line-clamp-2">{rec.title}</div>
                         <div className="flex items-center gap-2 mt-1 text-[11px]">
-                          <span>⭐ {rec.rating.toFixed(1)}</span>
-                          <span className="font-semibold text-primary">${rec.price}</span>
+                          <span>
+                            ⭐{" "}
+                            {rec.rating != null && !Number.isNaN(Number(rec.rating))
+                              ? Number(rec.rating).toFixed(1)
+                              : "—"}
+                          </span>
+                          <span className="font-semibold text-primary">
+                            {rec.price != null && String(rec.price).trim() !== ""
+                              ? (String(rec.price).includes("$") ? rec.price : `$${rec.price}`)
+                              : "—"}
+                          </span>
                         </div>
                       </Card>
                     </Link>

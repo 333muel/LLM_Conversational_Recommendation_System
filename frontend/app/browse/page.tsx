@@ -185,6 +185,15 @@ function BrowseContent() {
     setProductState({ display: formattedProducts, buffer: [] });
   };
 
+  const handleConstraintsUpdate = (newConstraints: Record<string, any>) => {
+    // Keep badge display and dislike-refill calls in sync with the chat's active filters
+    if (newConstraints.clear_constraints) {
+      setConstraints({});
+    } else {
+      setConstraints(prev => ({ ...prev, ...newConstraints }));
+    }
+  };
+
   if (!isAuthenticated) {
     return null;
   }
@@ -287,6 +296,7 @@ function BrowseContent() {
             quickChips={QUICK_CHIPS}
             initialConversationId={conversationId}
             onRecommendationsUpdate={handleRecommendationsUpdate}
+            onConstraintsUpdate={handleConstraintsUpdate}
             hideProductCards
             topK={20}
           />

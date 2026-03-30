@@ -33,19 +33,9 @@ class GenerateResponseNode(BaseNode):
                         "rank": rec.get("rank", 0)
                     })
                 else:
-                    # Product not found in DB, use minimal info
-                    product_details.append({
-                        "item_id": item_id,
-                        "title": f"Product {item_id}",
-                        "description": "",
-                        "rating": 0.0,
-                        "price": "",
-                        "categories": "",
-                        "main_category": "",
-                        "image": "",
-                        "score": rec.get("score", 0.0),
-                        "rank": rec.get("rank", 0)
-                    })
+                    # Item not in MongoDB catalog — skip it entirely rather than
+                    # returning a placeholder that misleads the user or LLM
+                    logger.debug(f"Item {item_id} not found in MongoDB catalog, skipping")
         
         return product_details
     
@@ -78,13 +68,17 @@ class GenerateResponseNode(BaseNode):
         # Build text for top recommendations
         top_products_text = ""
         for i, product in enumerate(top_items, 1):
-            top_products_text += f"\n{i}. {product.get('title', 'Unknown Product')}"
+            asin = product.get("item_id", "")
+            top_products_text += f"\n{i}. [ASIN {asin}] {product.get('title', 'Unknown Product')}"
             if product.get('description'):
                 top_products_text += f"\n   Description: {product.get('description', '')[:200]}"
             if product.get('rating'):
                 top_products_text += f"\n   Rating: {product.get('rating')}/5.0"
-            if product.get('price'):
-                top_products_text += f"\n   Price: {product.get('price')}"
+            price_val = product.get('price', '').strip() if product.get('price') else ''
+            if price_val:
+                top_products_text += f"\n   Price: {price_val}"
+            else:
+                top_products_text += f"\n   Price: (not listed — do NOT state a price)"
             if product.get('categories'):
                 top_products_text += f"\n   Category: {product.get('categories', '').split(';')[0]}"
             top_products_text += "\n"
@@ -106,15 +100,19 @@ Based on the user's request, I have found the following top recommended products
 
 {top_products_text}{context_summary}
 
+CRITICAL RULES (strictly enforced):
+1. Only mention products from the numbered list above. Copy each **bold** product name EXACTLY as shown (you may shorten very long titles with "..." but do NOT substitute different brands or products). Never invent or name products not in this list.
+2. NEVER state, estimate, or invent a price. If the product shows "(not listed — do NOT state a price)", omit any price claim entirely for that product. Only quote a price when it is explicitly shown in the list above.
+
 Please provide a VERY SHORT, friendly response (maximum 60 words total) that:
 1. Acknowledges the request in one sentence.
 2. Lists 2-3 top picks using bullet points (•) with ONE key point each.
-3. Use **bold** for product names. Keep each bullet to one short line.
+3. Use **bold** for product names exactly as in the list. Keep each bullet to one short line.
 4. No long paragraphs. Be conversational but scannable.
 
 Example format:
-• **Product A** – key benefit
-• **Product B** – key benefit
+• **Exact Title From List** – key benefit
+• **Exact Title From List** – key benefit
 
 Be brief and focused. Do not repeat full product details from the list."""
 
@@ -134,6 +132,18 @@ Be brief and focused. Do not repeat full product details from the list."""
                 product_details = self._get_product_details(raw_recommendations)
             
             logger.info(f"Retrieved details for {len(product_details)} products")
+
+            if not product_details:
+                msg = (
+                    "I couldn't find products that match your request right now. "
+                    "Try relaxing the price, category, or keywords—or browse again in a moment."
+                )
+                return {
+                    "final_response": msg,
+                    "product_details": [],
+                    "raw_recommendations": raw_recommendations,
+                    "messages": [{"role": "assistant", "content": msg}],
+                }
             
             # Get parameters from state
             top_k = state.get("top_k")
@@ -178,7 +188,9 @@ Be brief and focused. Do not repeat full product details from the list."""
             from apps.core.llm import get_llm_client
             client = get_llm_client(provider=llm_provider, model=llm_model)
             
-            response = await client.chat(messages=chat_messages)
+            # Recommendation blurbs are short and conversational — no benefit from
+            # extended chain-of-thought on thinking models.
+            response = await client.chat(messages=chat_messages, enable_thinking=False)
             
             logger.info("AI response generated successfully")
             

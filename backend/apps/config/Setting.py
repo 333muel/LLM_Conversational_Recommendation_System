@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     dashscope_api_key: str = os.getenv("DASHSCOPE_API_KEY", "")
     dashscope_base_url: str = os.getenv("DASHSCOPE_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
     dashscope_model: str = os.getenv("DASHSCOPE_MODEL", "qwen3.5-35b-a3b")
+    # Fast model for utility tasks (constraint extraction, profile update).
+    # Defaults to qwen-turbo — cheap, ~1-2 s, no chain-of-thought overhead.
+    dashscope_fast_model: str = os.getenv("DASHSCOPE_FAST_MODEL", "qwen-turbo")
     
     # API Configuration
     api_host: str = os.getenv("API_HOST", "0.0.0.0")

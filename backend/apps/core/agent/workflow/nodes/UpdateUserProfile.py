@@ -46,7 +46,7 @@ Return ONLY the JSON object. Do not include any other text."""
             profile = UserProfileRepository.get_profile(user_id)
             current_preferences = profile.get("preferences", {}) if profile else {}
             
-            # 2. Analyze using LLM
+            # 2. Analyze using LLM (fast utility model — no CoT needed for JSON extraction)
             logger.info(f"Analyzing user preferences for user_id: {user_id} using {llm_provider}")
             analysis_prompt = self.SYSTEM_PROMPT.format(
                 current_preferences=json.dumps(current_preferences),
@@ -54,11 +54,16 @@ Return ONLY the JSON object. Do not include any other text."""
             )
             
             from apps.core.llm import get_llm_client
-            client = get_llm_client(provider=llm_provider, model=self._model)
+            from apps.config.Setting import settings
+            fast_model = self._model or (
+                settings.dashscope_fast_model if llm_provider == "dashscope" else None
+            )
+            client = get_llm_client(provider=llm_provider, model=fast_model)
             
             response = await client.generate(
                 prompt=analysis_prompt,
-                system_prompt="You are a helpful user profile analyst. Return ONLY JSON."
+                system_prompt="You are a helpful user profile analyst. Return ONLY JSON.",
+                enable_thinking=False
             )
             
             # Clean and parse JSON

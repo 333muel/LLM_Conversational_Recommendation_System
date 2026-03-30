@@ -34,6 +34,7 @@ class RecommendationResponse(BaseModel):
     conversation_id: str = Field(..., description="Conversation ID for ongoing conversation")
     recommendations: List[ProductRecommendation] = Field(default_factory=list)
     raw_recommendations: List[Dict[str, Any]] = Field(default_factory=list, description="Raw recommendations from RecBole before LLM processing")
+    constraints: Dict[str, Any] = Field(default_factory=dict, description="Active merged constraints for this turn")
     debug: Dict[str, Any] = Field(default_factory=dict, description="Debug information about the recommendation process")
     user_id: Optional[str] = None
     success: bool = True

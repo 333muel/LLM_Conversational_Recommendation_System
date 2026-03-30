@@ -5,8 +5,7 @@ from apps.core.agent.workflow.nodes.RecommendItem import recommend_item_node
 from apps.core.agent.workflow.nodes.BrowseItem import browse_item_node
 from apps.core.agent.workflow.nodes.BaselineSearch import baseline_search_node
 from apps.core.agent.workflow.nodes.GenerateResponse import generate_response_node
-from apps.core.agent.workflow.nodes.UpdateUserProfile import update_user_profile_node
-from apps.core.agent.workflow.edges.Routing import route_after_recommend, route_after_generate
+from apps.core.agent.workflow.edges.Routing import route_after_recommend
 from apps.config.Tracing import get_logger
 
 logger = get_logger(__name__)
@@ -19,7 +18,6 @@ def create_recommendation_graph() -> StateGraph:
     # Add nodes
     workflow.add_node("recommend_item", recommend_item_node.execute)
     workflow.add_node("generate_response", generate_response_node.execute)
-    workflow.add_node("update_user_profile", update_user_profile_node.execute)
     
     # Set entry point
     workflow.set_entry_point("recommend_item")
@@ -33,15 +31,8 @@ def create_recommendation_graph() -> StateGraph:
         }
     )
     
-    workflow.add_conditional_edges(
-        "generate_response",
-        route_after_generate,
-        {
-            "update_user_profile": "update_user_profile"
-        }
-    )
-    
-    workflow.add_edge("update_user_profile", END)
+    # Profile update runs as a background task in AgentResponse to avoid blocking
+    workflow.add_edge("generate_response", END)
     
     return workflow.compile()
 
@@ -53,29 +44,13 @@ def create_browse_graph() -> StateGraph:
     # Add nodes
     workflow.add_node("browse_item", browse_item_node.execute)
     workflow.add_node("generate_response", generate_response_node.execute)
-    workflow.add_node("update_user_profile", update_user_profile_node.execute)
     
     # Set entry point
     workflow.set_entry_point("browse_item")
     
     # Add edges
-    workflow.add_conditional_edges(
-        "browse_item",
-        lambda x: "generate_response",
-        {
-            "generate_response": "generate_response"
-        }
-    )
-    
-    workflow.add_conditional_edges(
-        "generate_response",
-        route_after_generate,
-        {
-            "update_user_profile": "update_user_profile"
-        }
-    )
-    
-    workflow.add_edge("update_user_profile", END)
+    workflow.add_edge("browse_item", "generate_response")
+    workflow.add_edge("generate_response", END)
     
     return workflow.compile()
 
@@ -87,23 +62,13 @@ def create_baseline_graph() -> StateGraph:
     # Add nodes
     workflow.add_node("baseline_search", baseline_search_node.execute)
     workflow.add_node("generate_response", generate_response_node.execute)
-    workflow.add_node("update_user_profile", update_user_profile_node.execute)
     
     # Set entry point
     workflow.set_entry_point("baseline_search")
     
     # Add edges
     workflow.add_edge("baseline_search", "generate_response")
-    
-    workflow.add_conditional_edges(
-        "generate_response",
-        route_after_generate,
-        {
-            "update_user_profile": "update_user_profile"
-        }
-    )
-    
-    workflow.add_edge("update_user_profile", END)
+    workflow.add_edge("generate_response", END)
     
     return workflow.compile()
 

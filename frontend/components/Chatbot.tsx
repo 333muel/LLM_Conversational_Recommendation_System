@@ -166,7 +166,7 @@ export function Chatbot() {
             <div className="flex items-center justify-between gap-2.5">
               <div>
                 <DrawerTitle className="text-sm font-extrabold">
-                  {agentType === "baseline" ? "Assistant A" : "Assistant B"}
+                  Ask Assistant
                 </DrawerTitle>
                 <DrawerDescription className="text-[13px] text-[var(--muted-foreground)] leading-[1.45] mt-0.5">
                   Product recommendation assistant
@@ -220,10 +220,16 @@ export function Chatbot() {
                               <div className="flex items-center gap-2 mt-1">
                                 <div className="flex items-center gap-1">
                                   <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                                  <span className="text-[11px]">{rec.rating.toFixed(1)}</span>
+                                  <span className="text-[11px]">
+                                    {rec.rating != null && !Number.isNaN(Number(rec.rating))
+                                      ? Number(rec.rating).toFixed(1)
+                                      : "—"}
+                                  </span>
                                 </div>
                                 <span className="text-[11px] font-semibold text-primary">
-                                  ${rec.price}
+                                  {rec.price != null && String(rec.price).trim() !== ""
+                                    ? (String(rec.price).includes("$") ? rec.price : `$${rec.price}`)
+                                    : "—"}
                                 </span>
                               </div>
                             </div>

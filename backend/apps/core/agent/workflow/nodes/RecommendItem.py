@@ -1,4 +1,5 @@
 """Node for generating recommendations using RecBole."""
+import asyncio
 import anyio
 from typing import Dict, Any, List, Optional, Set
 from apps.core.agent.workflow.nodes.BaseNode import BaseNode
@@ -73,6 +74,24 @@ class RecommendItemNode(BaseNode):
                     for i, p in enumerate(db_results[:top_k])
                 ]
 
+        # Price/rating-only: RecBole candidates may all exceed max_price — search full catalog
+        if len(matching) < 3 and (
+            constraints.get("max_price") is not None or constraints.get("min_rating") is not None
+        ):
+            logger.info("Few matches with price/rating constraints; searching entire DB.")
+            db_results = ProductRepository.filter_products(
+                product_ids=None,
+                category=constraints.get("category"),
+                max_price=constraints.get("max_price"),
+                min_rating=constraints.get("min_rating"),
+                keywords=constraints.get("keywords"),
+            )
+            if db_results:
+                return [
+                    {"item_id": p.get("asin"), "score": 0.0, "rank": i + 1}
+                    for i, p in enumerate(db_results[:top_k])
+                ]
+
         # Last resort: return unfiltered (better than empty)
         logger.info("No constraint matches, using unfiltered RecBole recommendations.")
         return raw_recommendations[:top_k]
@@ -97,12 +116,19 @@ class RecommendItemNode(BaseNode):
             # Request extra items when excluding (for regenerate)
             context_k = max(top_k + len(exclude_item_ids), settings.recommendation_context_k)
 
-            recommendations = await anyio.to_thread.run_sync(
-                lambda: engine.recommend(
-                    user_id=user_id,
-                    top_k=context_k,
-                    filter_interacted=True,
-                )
+            # Run RecBole inference and constraint extraction concurrently — they
+            # are independent so there is no reason to wait for RecBole before
+            # calling the LLM.
+            processor = QueryProcessor(provider=llm_provider)
+            recommendations, new_constraints = await asyncio.gather(
+                anyio.to_thread.run_sync(
+                    lambda: engine.recommend(
+                        user_id=user_id,
+                        top_k=context_k,
+                        filter_interacted=True,
+                    )
+                ),
+                processor.process(user_message),
             )
 
             logger.info(f"Generated {len(recommendations)} raw recommendations from RecBole")
@@ -113,9 +139,20 @@ class RecommendItemNode(BaseNode):
                 recommendations = [r for r in recommendations if r.get("item_id") not in exclude_set][:top_k]
                 logger.info(f"After excluding {len(exclude_set)} items (regenerate): {len(recommendations)} recommendations")
 
-            # Extract constraints and filter when user refines (e.g., "Yes CeraVe")
-            processor = QueryProcessor(provider=llm_provider)
-            constraints = await processor.process(user_message)
+            # Cumulative constraint merging: new values override previous, but
+            # previous values persist if the user didn't mention them this turn.
+            if new_constraints.get("clear_constraints"):
+                constraints = {}
+                logger.info("User requested filter reset — clearing all active constraints")
+            else:
+                previous = state.get("constraints") or {}
+                constraints = dict(previous)
+                for k, v in new_constraints.items():
+                    # Always update intent/flags; skip None/empty values for filter keys
+                    if k in ("intent", "regenerate", "clear_constraints"):
+                        constraints[k] = v
+                    elif v is not None and v != [] and v != {}:
+                        constraints[k] = v
 
             if self._has_refinement_constraints(constraints):
                 logger.info(f"Applying constraint filter: {constraints}")

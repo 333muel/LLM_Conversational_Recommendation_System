@@ -41,6 +41,9 @@ class RecommendationAgent:
             history = ConversationRepository.get_history(conversation_id)
             session_start_time = ConversationRepository.get_conversation_created_at(conversation_id) or datetime.utcnow()
             
+            # --- Cumulative constraints: load previous turn's active constraints ---
+            previous_constraints = ConversationRepository.get_constraints(conversation_id)
+
             # --- Regenerate: exclude previously recommended items ---
             _regenerate_keywords = ("regenerate", "different products", "something else", "more options", "other options", "show me different", "try again", "new recommendations", "different set", "new set", "give me a new", "replace the")
             _msg_lower = user_message.lower().strip()
@@ -67,7 +70,7 @@ class RecommendationAgent:
             _model = model or (settings.dashscope_model if llm_provider == "dashscope" else settings.ollama_model)
             initial_state: RecommendationState = {
                 "user_message": user_message + (f"\n{feedback_context}" if feedback_context else ""),
-                "constraints": None,
+                "constraints": previous_constraints or None,
                 "user_id": user_id,
                 "top_k": top_k,
                 "algorithm": algorithm,
@@ -93,6 +96,12 @@ class RecommendationAgent:
             # Store last recommended for regenerate logic
             if product_details:
                 ConversationRepository.save_last_recommended(conversation_id, [p.get("item_id") for p in product_details if p.get("item_id")])
+            # Persist merged constraints for the next turn
+            merged_constraints = result.get("constraints") or {}
+            if merged_constraints.get("clear_constraints"):
+                ConversationRepository.clear_constraints(conversation_id)
+            elif merged_constraints:
+                ConversationRepository.save_constraints(conversation_id, merged_constraints)
             
             # --- Non-blocking Post-processing (Logging & Profile) ---
             if background_tasks:
@@ -106,7 +115,8 @@ class RecommendationAgent:
                     metadata=metadata,
                     session_start_time=session_start_time,
                     turn_num=len(updated_messages) // 2 + 1,
-                    constraints=result.get("constraints")
+                    constraints=result.get("constraints"),
+                    llm_provider=llm_provider
                 )
             else:
                 # Fallback if no background tasks provided
@@ -119,7 +129,8 @@ class RecommendationAgent:
                     metadata=metadata,
                     session_start_time=session_start_time,
                     turn_num=len(updated_messages) // 2 + 1,
-                    constraints=result.get("constraints")
+                    constraints=result.get("constraints"),
+                    llm_provider=llm_provider
                 )
             
             return {
@@ -127,6 +138,7 @@ class RecommendationAgent:
                 "conversation_id": conversation_id,
                 "recommendations": product_details[:top_k or settings.recommendation_top_k],
                 "raw_recommendations": result.get("raw_recommendations", [])[:top_k or settings.recommendation_top_k],
+                "constraints": merged_constraints,
                 "user_id": user_id,
                 "success": True,
                 "debug": {"algorithm_used": algorithm or "LightGCN"}
@@ -204,7 +216,8 @@ class RecommendationAgent:
                     metadata=metadata,
                     session_start_time=session_start_time,
                     turn_num=len(updated_messages) // 2 + 1,
-                    constraints=result.get("constraints")
+                    constraints=result.get("constraints"),
+                    llm_provider=llm_provider
                 )
             else:
                 await self._post_process_interaction(
@@ -216,7 +229,8 @@ class RecommendationAgent:
                     metadata=metadata,
                     session_start_time=session_start_time,
                     turn_num=len(updated_messages) // 2 + 1,
-                    constraints=result.get("constraints")
+                    constraints=result.get("constraints"),
+                    llm_provider=llm_provider
                 )
             
             return {
@@ -301,7 +315,8 @@ class RecommendationAgent:
                     metadata=metadata,
                     session_start_time=session_start_time,
                     turn_num=len(updated_messages) // 2 + 1,
-                    constraints=result.get("constraints")
+                    constraints=result.get("constraints"),
+                    llm_provider=llm_provider
                 )
             else:
                 await self._post_process_interaction(
@@ -313,7 +328,8 @@ class RecommendationAgent:
                     metadata=metadata,
                     session_start_time=session_start_time,
                     turn_num=len(updated_messages) // 2 + 1,
-                    constraints=result.get("constraints")
+                    constraints=result.get("constraints"),
+                    llm_provider=llm_provider
                 )
             
             return {
@@ -328,16 +344,16 @@ class RecommendationAgent:
             logger.error(f"Baseline error: {e}")
             return {"response": f"Error: {e}", "conversation_id": conversation_id or str(uuid.uuid4()), "success": False}
 
-    async def _post_process_interaction(self, user_id, conversation_id, user_message, final_response, product_details, metadata, session_start_time, turn_num, constraints):
+    async def _post_process_interaction(self, user_id, conversation_id, user_message, final_response, product_details, metadata, session_start_time, turn_num, constraints, llm_provider="ollama"):
         """Asynchronous task to update user profile and log interaction."""
         try:
             # 1. Update User Profile (AI Analysis)
             from apps.core.agent.workflow.nodes.UpdateUserProfile import update_user_profile_node
-            # Create a minimal state for the node
             mock_state = {
                 "user_id": user_id,
                 "user_message": user_message,
-                "final_response": final_response
+                "final_response": final_response,
+                "llm_provider": llm_provider
             }
             await update_user_profile_node.execute(mock_state)
             
@@ -608,7 +624,8 @@ JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "p
                     metadata=metadata,
                     session_start_time=session_start_time,
                     turn_num=len(updated_messages) // 2 + 1,
-                    constraints=None
+                    constraints=None,
+                    llm_provider=llm_provider
                 )
             else:
                 await self._post_process_interaction(
@@ -620,7 +637,8 @@ JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "p
                     metadata=metadata,
                     session_start_time=session_start_time,
                     turn_num=len(updated_messages) // 2 + 1,
-                    constraints=None
+                    constraints=None,
+                    llm_provider=llm_provider
                 )
             
             return {"response": final_response, "conversation_id": conversation_id, "success": True}

@@ -43,6 +43,7 @@ export interface RecommendationResponse {
   response: string;
   conversation_id: string;
   recommendations: Recommendation[];
+  constraints?: Record<string, any>;
   user_id: string;
   success: boolean;
   debug?: {

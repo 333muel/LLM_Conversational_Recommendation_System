@@ -16,17 +16,22 @@ class DashScopeClient:
         self.base_url = base_url or settings.dashscope_base_url
         self.model = model or settings.dashscope_model
     
-    async def generate(self, prompt: str, system_prompt: Optional[str] = None, **kwargs) -> str:
+    async def generate(self, prompt: str, system_prompt: Optional[str] = None, enable_thinking: Optional[bool] = None, **kwargs) -> str:
         """Generate text using DashScope (Async)."""
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
         
-        return await self.chat(messages, **kwargs)
+        return await self.chat(messages, enable_thinking=enable_thinking, **kwargs)
     
-    async def chat(self, messages: List[Dict[str, str]], **kwargs) -> str:
-        """Chat with DashScope using message format (Async)."""
+    async def chat(self, messages: List[Dict[str, str]], enable_thinking: Optional[bool] = None, **kwargs) -> str:
+        """Chat with DashScope using message format (Async).
+        
+        Pass enable_thinking=False to skip the chain-of-thought step on Qwen3
+        thinking models. This cuts latency from ~60-90 s down to ~2-5 s for
+        simple tasks while keeping the same model weights.
+        """
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
@@ -39,6 +44,9 @@ class DashScopeClient:
                 "stream": False,
                 **kwargs
             }
+            # Qwen3 thinking models honour this flag to skip the CoT step
+            if enable_thinking is not None:
+                payload["enable_thinking"] = enable_thinking
             
             async with httpx.AsyncClient(timeout=120.0) as client:
                 response = await client.post(
