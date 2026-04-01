@@ -12,17 +12,33 @@ class GenerateResponseNode(BaseNode):
     """Node that generates final AI response based on recommendations."""
     
     def _get_product_details(self, recommendations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Get product details for recommended items."""
+        """Get product details for recommended items.
+
+        Deduplicates by normalised product title so that variant ASINs for the
+        same product (e.g. different pack sizes or duplicate catalogue entries)
+        are not surfaced as separate recommendations.  The highest-ranked item
+        for each unique title is kept.
+        """
         product_details = []
-        
+        seen_titles: set = set()
+
         for rec in recommendations:
             item_id = rec.get("item_id")
             if item_id:
                 product = ProductRepository.get_product_by_id(item_id)
                 if product:
+                    raw_title: str = product.get("product_title", "")
+                    # Normalise: lowercase + collapse whitespace for comparison
+                    normalised_title = " ".join(raw_title.lower().split())
+                    if normalised_title in seen_titles:
+                        logger.debug(
+                            f"Skipping duplicate title for item {item_id}: '{raw_title}'"
+                        )
+                        continue
+                    seen_titles.add(normalised_title)
                     product_details.append({
                         "item_id": item_id,
-                        "title": product.get("product_title", ""),
+                        "title": raw_title,
                         "description": product.get("product_description", ""),
                         "rating": product.get("product_avg_rating"),
                         "price": product.get("product_price", ""),
@@ -36,7 +52,7 @@ class GenerateResponseNode(BaseNode):
                     # Item not in MongoDB catalog — skip it entirely rather than
                     # returning a placeholder that misleads the user or LLM
                     logger.debug(f"Item {item_id} not found in MongoDB catalog, skipping")
-        
+
         return product_details
     
     def _create_recommendation_prompt(

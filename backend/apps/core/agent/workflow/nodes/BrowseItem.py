@@ -38,12 +38,21 @@ class BrowseItemNode(BaseNode):
                 candidate_asins = [c["item_id"] for c in candidates]
                 products = ProductRepository.get_products_by_ids(candidate_asins)
                 
-                # Format products
+                # Format products, deduplicating by normalised title
                 formatted_products = []
+                seen_titles: set = set()
                 for p in products:
+                    raw_title: str = p.get("product_title", "Unknown")
+                    normalised_title = " ".join(raw_title.lower().split())
+                    if normalised_title in seen_titles:
+                        logger.debug(
+                            f"Skipping duplicate title for item {p.get('asin')}: '{raw_title}'"
+                        )
+                        continue
+                    seen_titles.add(normalised_title)
                     formatted_products.append({
                         "item_id": p.get("asin"),
-                        "title": p.get("product_title", "Unknown"),
+                        "title": raw_title,
                         "description": p.get("product_description", ""),
                         "rating": p.get("product_avg_rating"),
                         "price": p.get("product_price", ""),
@@ -133,18 +142,28 @@ class BrowseItemNode(BaseNode):
 
             # Transform to unified format for state
             # Map MongoDB document to the format used in product_details
+            # Deduplicate by normalised title so variant ASINs for the same product are not surfaced as separate recommendations.
             formatted_products = []
+            seen_titles: set = set()
             for p in final_products:
+                raw_title: str = p.get("product_title", "Unknown")
+                normalised_title = " ".join(raw_title.lower().split())
+                if normalised_title in seen_titles:
+                    logger.debug(
+                        f"Skipping duplicate title for item {p.get('asin')}: '{raw_title}'"
+                    )
+                    continue
+                seen_titles.add(normalised_title)
                 formatted_products.append({
                     "item_id": p.get("asin"),
-                    "title": p.get("product_title", "Unknown"),
+                    "title": raw_title,
                     "description": p.get("product_description", ""),
                     "rating": p.get("product_avg_rating"),
                     "price": p.get("product_price", ""),
                     "categories": p.get("product_categories", ""),
                     "main_category": p.get("product_main_category", ""),
                     "image": p.get("product_image_url", ""),
-                    "score": 0.0, # Will be filled if needed, or ignored by LLM
+                    "score": 0.0,
                     "rank": 0
                 })
 

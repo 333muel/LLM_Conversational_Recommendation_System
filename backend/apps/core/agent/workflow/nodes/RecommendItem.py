@@ -33,9 +33,14 @@ class RecommendItemNode(BaseNode):
         self,
         raw_recommendations: List[Dict[str, Any]],
         constraints: Dict[str, Any],
-        top_k: int,
+        limit: int,
     ) -> List[Dict[str, Any]]:
-        """Filter RecBole recommendations by extracted constraints."""
+        """Filter RecBole recommendations by extracted constraints.
+
+        Returns up to `limit` candidates.  The caller is responsible for the
+        final top-k slice (after title deduplication) so `limit` should be
+        larger than top_k — typically context_k.
+        """
         candidate_asins = [r["item_id"] for r in raw_recommendations]
         rec_map = {r["item_id"]: r for r in raw_recommendations}
 
@@ -56,7 +61,7 @@ class RecommendItemNode(BaseNode):
                     filtered.append(rec_map[asin])
                 else:
                     filtered.append({"item_id": asin, "score": 0.0, "rank": len(filtered) + 1})
-            return filtered[:top_k]
+            return filtered[:limit]
 
         # Fallback: search entire DB when few matches in RecBole candidates
         if constraints.get("keywords") or constraints.get("category"):
@@ -71,7 +76,7 @@ class RecommendItemNode(BaseNode):
             if db_results:
                 return [
                     {"item_id": p.get("asin"), "score": 0.0, "rank": i + 1}
-                    for i, p in enumerate(db_results[:top_k])
+                    for i, p in enumerate(db_results[:limit])
                 ]
 
         # Price/rating-only: RecBole candidates may all exceed max_price — search full catalog
@@ -89,12 +94,12 @@ class RecommendItemNode(BaseNode):
             if db_results:
                 return [
                     {"item_id": p.get("asin"), "score": 0.0, "rank": i + 1}
-                    for i, p in enumerate(db_results[:top_k])
+                    for i, p in enumerate(db_results[:limit])
                 ]
 
         # Last resort: return unfiltered (better than empty)
         logger.info("No constraint matches, using unfiltered RecBole recommendations.")
-        return raw_recommendations[:top_k]
+        return raw_recommendations[:limit]
 
     async def execute(self, state: RecommendationState) -> Dict[str, Any]:
         """Generate recommendations for the user, optionally filtered by constraints."""
@@ -136,7 +141,7 @@ class RecommendItemNode(BaseNode):
             # Exclude previously recommended items (regenerate flow)
             if exclude_item_ids:
                 exclude_set: Set[str] = set(exclude_item_ids)
-                recommendations = [r for r in recommendations if r.get("item_id") not in exclude_set][:top_k]
+                recommendations = [r for r in recommendations if r.get("item_id") not in exclude_set]
                 logger.info(f"After excluding {len(exclude_set)} items (regenerate): {len(recommendations)} recommendations")
 
             # Cumulative constraint merging: new values override previous, but
@@ -157,11 +162,11 @@ class RecommendItemNode(BaseNode):
             if self._has_refinement_constraints(constraints):
                 logger.info(f"Applying constraint filter: {constraints}")
                 recommendations = self._filter_by_constraints(
-                    recommendations, constraints, top_k
+                    recommendations, constraints, context_k
                 )
                 logger.info(f"After constraint filter: {len(recommendations)} recommendations")
             else:
-                recommendations = recommendations[:top_k]
+                recommendations = recommendations[:context_k]
 
             return {
                 "raw_recommendations": recommendations,
