@@ -38,6 +38,9 @@ class RecommendationState(TypedDict):
     # Final AI-generated recommendation response
     final_response: Optional[str]
     
+    # 1-based indices of products the LLM highlighted in its response
+    highlighted_indices: Optional[List[int]]
+    
     # Messages for LLM conversation
     messages: Annotated[List[Dict], add_messages]
 

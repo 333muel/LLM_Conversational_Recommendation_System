@@ -12,6 +12,7 @@ class RecommendationRequest(BaseModel):
     model: Optional[str] = Field(None, description="LLM model to use (default: qwen3:latest)")
     llm_provider: Optional[str] = Field("ollama", description="LLM provider to use (e.g., 'ollama', 'dashscope')")
     algorithm: Optional[str] = Field(None, description="RecBole algorithm/checkpoint to use (e.g., 'LightGCN', 'BPR'). If not found, defaults to LightGCN")
+    mode: Optional[str] = Field("recommend", description="Interaction mode: 'recommend' for product recommendations, 'qa' for Q&A about products")
 
 
 class ProductRecommendation(BaseModel):
@@ -100,6 +101,7 @@ class RespondResponse(BaseModel):
     response: str
     conversation_id: str
     success: bool = True
+    highlighted_indices: Optional[List[int]] = None
 
 
 class SelectItemRequest(BaseModel):

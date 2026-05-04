@@ -37,22 +37,30 @@ async def get_recommendations(request: RecommendationRequest, background_tasks: 
     """
     try:
         logger.info(f"Received recommendation request: {request.message[:100]}")
-        logger.info(f"Parameters: conv_id={request.conversation_id}, top_k={request.top_k}, algorithm={request.algorithm}, model={request.model}")
+        logger.info(f"Parameters: conv_id={request.conversation_id}, top_k={request.top_k}, algorithm={request.algorithm}, model={request.model}, mode={request.mode}")
         
-        # Get agent and process request
         agent = get_recommendation_agent()
-        result = await agent.process_request(
-            user_message=request.message,
-            conversation_id=request.conversation_id,
-            user_id=request.user_id,
-            top_k=request.top_k,
-            model=request.model,
-            llm_provider=request.llm_provider,
-            algorithm=request.algorithm,
-            background_tasks=background_tasks
-        )
+
+        if request.mode == "qa":
+            result = await agent.process_qa(
+                user_message=request.message,
+                conversation_id=request.conversation_id,
+                user_id=request.user_id,
+                llm_provider=request.llm_provider,
+                background_tasks=background_tasks,
+            )
+        else:
+            result = await agent.process_request(
+                user_message=request.message,
+                conversation_id=request.conversation_id,
+                user_id=request.user_id,
+                top_k=request.top_k,
+                model=request.model,
+                llm_provider=request.llm_provider,
+                algorithm=request.algorithm,
+                background_tasks=background_tasks
+            )
         
-        # Convert to response model
         response = RecommendationResponse(**result)
         
         logger.info(f"Recommendation generated successfully for conv {response.conversation_id}: {len(response.recommendations)} items")
@@ -111,7 +119,6 @@ async def get_baseline_recommendations(request: RecommendationRequest, backgroun
     try:
         logger.info(f"Received baseline recommendation request: {request.message[:100]}")
         
-        # Get agent and process request
         agent = get_recommendation_agent()
         result = await agent.process_baseline(
             user_message=request.message,
@@ -123,11 +130,9 @@ async def get_baseline_recommendations(request: RecommendationRequest, backgroun
             background_tasks=background_tasks
         )
         
-        # In process_baseline, we returned "recommendations", but BrowseResponse expects "products"
         if "recommendations" in result and "products" not in result:
             result["products"] = result.pop("recommendations")
             
-        # Convert to response model
         response = BrowseResponse(**result)
         
         logger.info(f"Baseline recommendation generated successfully for conv {response.conversation_id}: {len(response.products)} items")
@@ -220,7 +225,6 @@ async def explain_recommendation(request: ExplainRequest) -> ExplainResponse:
     """Explain why a product was recommended."""
     try:
         agent = get_recommendation_agent()
-        # We'll implement this method in RecommendationAgent
         result = await agent.explain_recommendation(
             request.user_id,
             request.conversation_id,

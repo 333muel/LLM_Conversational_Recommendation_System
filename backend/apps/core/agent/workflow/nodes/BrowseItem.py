@@ -28,7 +28,6 @@ class BrowseItemNode(BaseNode):
             is_generic = not user_message or user_message.lower().strip() in ["show me some recommendations", "recommend some products", "browse"]
             
             if is_generic:
-                # ... existing logic ...
                 logger.info("Generic request detected, skipping AI query processing.")
                 engine = get_recbole_engine(algorithm=algorithm)
                 # Run sync in thread to avoid blocking loop
@@ -70,19 +69,16 @@ class BrowseItemNode(BaseNode):
                     "user_id": user_id,
                     "final_response": "I've picked out some top recommendations from across our beauty collection just for you! Have a look through these curated picks, and let me know if you're looking for something more specific like a particular category or price range."
                 }
-
-            # 1. AI Query Processing
+            
             processor = QueryProcessor(provider=llm_provider)
             constraints = await processor.process(user_message)
             
-            # 2. Get large candidate set from RecBole (Top 100)
             engine = get_recbole_engine(algorithm=algorithm)
             candidates = await anyio.to_thread.run_sync(
                 engine.recommend, user_id, 100
             )
             candidate_asins = [c["item_id"] for c in candidates]
             
-            # 3. Filter candidates based on constraints
             matching_products = ProductRepository.filter_products(
                 product_ids=candidate_asins,
                 category=constraints.get("category"),
@@ -91,15 +87,12 @@ class BrowseItemNode(BaseNode):
                 keywords=constraints.get("keywords")
             )
             
-            # 4. Narrowing and Fallback Logic
-            final_products = []
             metadata = {
                 "matched_count": len(matching_products),
                 "source": "recbole_filtered",
                 "constraints_applied": constraints
             }
             
-            # If we found matches, take them (up to 20)
             final_products = matching_products[:20]
             
             # Fallback 1: If matches < 5 and we have a category, search the whole DB
@@ -140,9 +133,6 @@ class BrowseItemNode(BaseNode):
                         break
                 metadata["added_from_recbole_unfiltered"] = added_from_rec
 
-            # Transform to unified format for state
-            # Map MongoDB document to the format used in product_details
-            # Deduplicate by normalised title so variant ASINs for the same product are not surfaced as separate recommendations.
             formatted_products = []
             seen_titles: set = set()
             for p in final_products:

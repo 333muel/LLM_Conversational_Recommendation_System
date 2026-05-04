@@ -63,6 +63,7 @@ export interface RecommendationRequest {
   model?: string;
   llm_provider?: string;
   algorithm?: string;
+  mode?: "recommend" | "qa";
 }
 
 export interface BrowseRequest {
@@ -122,6 +123,7 @@ export interface RespondResponse {
   response: string;
   conversation_id: string;
   success: boolean;
+  highlighted_indices?: number[];
 }
 
 export interface ExplainRequest {

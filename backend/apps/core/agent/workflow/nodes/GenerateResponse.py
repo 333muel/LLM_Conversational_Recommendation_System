@@ -1,4 +1,5 @@
 """Node for generating final AI response."""
+import re
 from typing import Dict, Any, List, Optional
 from apps.core.agent.workflow.nodes.BaseNode import BaseNode
 from apps.core.agent.workflow.state.RecommendationState import RecommendationState
@@ -28,7 +29,6 @@ class GenerateResponseNode(BaseNode):
                 product = ProductRepository.get_product_by_id(item_id)
                 if product:
                     raw_title: str = product.get("product_title", "")
-                    # Normalise: lowercase + collapse whitespace for comparison
                     normalised_title = " ".join(raw_title.lower().split())
                     if normalised_title in seen_titles:
                         logger.debug(
@@ -49,43 +49,84 @@ class GenerateResponseNode(BaseNode):
                         "rank": rec.get("rank", 0)
                     })
                 else:
-                    # Item not in MongoDB catalog — skip it entirely rather than
-                    # returning a placeholder that misleads the user or LLM
                     logger.debug(f"Item {item_id} not found in MongoDB catalog, skipping")
 
         return product_details
     
+    def _deduplicate_by_title(self, product_details: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Remove entries that share the same normalised product title.
+
+        Keeps the first (highest-ranked) occurrence.  Used when product_details
+        are already formatted and injected into state, bypassing _get_product_details.
+        """
+        seen_titles: set = set()
+        deduplicated = []
+        for product in product_details:
+            raw_title: str = product.get("title", "")
+            normalised_title = " ".join(raw_title.lower().split())
+            if normalised_title in seen_titles:
+                logger.debug(
+                    f"Skipping duplicate title for item {product.get('item_id')}: '{raw_title}'"
+                )
+                continue
+            seen_titles.add(normalised_title)
+            deduplicated.append(product)
+        return deduplicated
+
+    def _sanitize_response(self, text: str) -> str:
+        """Sanitize response to prevent system prompt leakage."""
+        keywords = [
+            "RecBole", "LangGraph", "MongoDB", "DashScope", "Ollama", 
+            "system prompt", "internal instruction", "workflow node",
+            "GenerateResponseNode", "RecommendItemNode"
+        ]
+        text_lower = text.lower()
+        for kw in keywords:
+            if kw.lower() in text_lower:
+                logger.warning(f"Response flagged for architectural keyword leakage: {kw}")
+                return (
+                    "I've found some great recommendations for you, but I encountered "
+                    "a safety filter while formatting the response. Please try asking "
+                    "about specific products or categories again!"
+                )
+        return text
+
+    @staticmethod
+    def _short_name(title: str) -> str:
+        """Create a concise display name from a verbose Amazon product title."""
+        if not title:
+            return "Unknown Product"
+        for sep in (" - ", " | ", " – "):
+            parts = title.split(sep)
+            if len(parts) >= 2:
+                short = parts[0].strip()
+                if len(short) < 15 and len(parts) > 1:
+                    short = f"{parts[0].strip()} {parts[1].strip()}"
+                return short[:55]
+        if "," in title:
+            short = title.split(",")[0].strip()
+            if len(short) > 10:
+                return short[:55]
+        return title[:55]
+
     def _create_recommendation_prompt(
         self,
-        user_message: str,
         product_details: List[Dict[str, Any]],
         top_n: int = 10,
         metadata: Optional[Dict[str, Any]] = None
     ) -> str:
-        """Create prompt for LLM to generate recommendation response."""
-        from apps.config.Setting import settings
+        """Create prompt for LLM to generate recommendation response.
         
-        # Build info about product sourcing
-        source_info = ""
-        if metadata:
-            source = metadata.get("source", "recommendation")
-            matched = metadata.get("matched_count", 0)
-            if source == "mixed_db_fallback":
-                source_info = f"\nNote for Assistant: We couldn't find enough items in the user's personalized recommendations that match their specific filter. I have supplemented the results with top-rated items from the entire store database."
-            elif matched > 0:
-                source_info = f"\nNote for Assistant: I found {matched} products from the user's personalized recommendations that match their request."
-            else:
-                source_info = f"\nNote for Assistant: None of the user's usual personalized recommendations matched this query, so I am showing their top general recommendations."
-
-        # Separate top items (to highlight) from context items
+        Note: user_message is NOT concatenated here to mitigate prompt injection.
+        It is passed as a distinct HumanMessage in the chat history.
+        """
         top_items = product_details[:top_n]
         context_items = product_details[top_n:] if len(product_details) > top_n else []
         
-        # Build text for top recommendations
         top_products_text = ""
         for i, product in enumerate(top_items, 1):
-            asin = product.get("item_id", "")
-            top_products_text += f"\n{i}. [ASIN {asin}] {product.get('title', 'Unknown Product')}"
+            short = self._short_name(product.get("title", "Unknown Product"))
+            top_products_text += f"\n{i}. **{short}**"
             if product.get('description'):
                 top_products_text += f"\n   Description: {product.get('description', '')[:200]}"
             if product.get('rating'):
@@ -98,8 +139,7 @@ class GenerateResponseNode(BaseNode):
             if product.get('categories'):
                 top_products_text += f"\n   Category: {product.get('categories', '').split(';')[0]}"
             top_products_text += "\n"
-        
-        # Build context summary if there are additional items
+            
         context_summary = ""
         if context_items:
             categories = {}
@@ -110,27 +150,27 @@ class GenerateResponseNode(BaseNode):
             context_summary = f"\n\nAdditional context: I also found {len(context_items)} more products in categories like: {', '.join(list(categories.keys())[:5])}. "
             context_summary += "You can mention these categories if relevant to the user's request, but focus on the top recommendations above."
         
-        prompt = f"""You are a helpful recommendation assistant. A user has asked: "{user_message}"
+        prompt = f"""You are a helpful recommendation assistant for a beauty e-commerce store.
 
-Based on the user's request, I have found the following top recommended products (ranked by relevance):
+Based on the products provided below (and the user's latest query provided as a separate message), 
+generate a concise, friendly response.
 
+### PRODUCT DATA (DELIMITED) ###
 {top_products_text}{context_summary}
+### END PRODUCT DATA ###
 
 CRITICAL RULES (strictly enforced):
-1. Only mention products from the numbered list above. Copy each **bold** product name EXACTLY as shown (you may shorten very long titles with "..." but do NOT substitute different brands or products). Never invent or name products not in this list.
-2. NEVER state, estimate, or invent a price. If the product shows "(not listed — do NOT state a price)", omit any price claim entirely for that product. Only quote a price when it is explicitly shown in the list above.
+1. Only mention products from the numbered list above using the **bold short name** shown.
+2. NEVER state, estimate, or invent a price. If the product shows "(not listed — do NOT state a price)", omit any price claim.
+3. If you do not find suitable products in the list, state that you couldn't find matches.
 
 Please provide a VERY SHORT, friendly response (maximum 60 words total) that:
 1. Acknowledges the request in one sentence.
-2. Lists 2-3 top picks using bullet points (•) with ONE key point each.
-3. Use **bold** for product names exactly as in the list. Keep each bullet to one short line.
-4. No long paragraphs. Be conversational but scannable.
+2. Lists 2-3 top picks using bullet points (•) with **bold name** and ONE key point each.
+3. Keep each bullet to one short line. Be conversational but scannable.
+4. On the VERY LAST line, output EXACTLY: HIGHLIGHTED: X, Y (the product numbers you featured, comma-separated). This line is mandatory.
 
-Example format:
-• **Exact Title From List** – key benefit
-• **Exact Title From List** – key benefit
-
-Be brief and focused. Do not repeat full product details from the list."""
+[STOP_SEQUENCE: User:]"""
 
         return prompt
     
@@ -141,12 +181,12 @@ Be brief and focused. Do not repeat full product details from the list."""
             raw_recommendations = state.get("raw_recommendations", [])
             messages = state.get("messages", [])
             
-            # Get product details for all recommendations
-            # If product_details are already provided (e.g. by BrowseItemNode), use them
             product_details = state.get("product_details", [])
             if not product_details and raw_recommendations:
                 product_details = self._get_product_details(raw_recommendations)
-            
+            else:
+                product_details = self._deduplicate_by_title(product_details)
+
             logger.info(f"Retrieved details for {len(product_details)} products")
 
             if not product_details:
@@ -161,42 +201,33 @@ Be brief and focused. Do not repeat full product details from the list."""
                     "messages": [{"role": "assistant", "content": msg}],
                 }
             
-            # Get parameters from state
             top_k = state.get("top_k")
             model = state.get("model")
             
-            # Use provided top_k or default
             from apps.config.Setting import settings
             if top_k is None:
                 top_k = settings.recommendation_top_k
             
-            # Generate context from recommendations for the AI
             recommendations_context = self._create_recommendation_prompt(
-                user_message, 
                 product_details,
                 top_n=top_k,
                 metadata=state.get("product_metadata")
             )
             
-            # Prepare chat messages
             chat_messages = []
             
-            # Add a system prompt with context about the recommendations
             chat_messages.append({
                 "role": "system",
                 "content": f"You are a helpful and friendly recommendation assistant. {recommendations_context}"
             })
             
-            # Add conversation history
-            # Filter out any existing system messages from history if we want to use our new one
             for msg in messages:
                 if msg.get("role") != "system":
                     chat_messages.append(msg)
             
-            # Generate response using LLM - use provider-specific model (state "model" may be wrong if from different provider)
             llm_provider = state.get("llm_provider", "ollama")
             if llm_provider == "dashscope":
-                llm_model = model if model and ":" not in model else settings.dashscope_model  # ":" indicates Ollama tag
+                llm_model = model if model and ":" not in model else settings.dashscope_model
             else:
                 llm_model = model or settings.ollama_model
             logger.info(f"Generating AI response using provider: {llm_provider}, model: {llm_model}")
@@ -204,21 +235,37 @@ Be brief and focused. Do not repeat full product details from the list."""
             from apps.core.llm import get_llm_client
             client = get_llm_client(provider=llm_provider, model=llm_model)
             
-            # Recommendation blurbs are short and conversational — no benefit from
-            # extended chain-of-thought on thinking models.
-            response = await client.chat(messages=chat_messages, enable_thinking=False)
+            response = await client.chat(
+                messages=chat_messages, 
+                enable_thinking=False,
+                stop=["User:", "Human:", "System:"]
+            )
             
-            logger.info("AI response generated successfully")
+            highlighted_indices: List[int] = []
+            hi_match = re.search(r"HIGHLIGHTED:\s*([\d,\s]+)", response, re.IGNORECASE)
+            if hi_match:
+                highlighted_indices = [
+                    int(x.strip()) for x in hi_match.group(1).split(",") if x.strip().isdigit()
+                ]
+                response = re.sub(r"\n?\s*HIGHLIGHTED:\s*[\d,\s]+\s*$", "", response, flags=re.IGNORECASE).strip()
+                
+            response = self._sanitize_response(response)
             
-            # Return top_k product details
+            logger.info(f"AI response generated successfully (highlighted: {highlighted_indices})")
+            
             top_product_details = product_details[:top_k]
+            if highlighted_indices:
+                idx_set = set(highlighted_indices)
+                highlighted = [p for i, p in enumerate(top_product_details, 1) if i in idx_set]
+                rest = [p for i, p in enumerate(top_product_details, 1) if i not in idx_set]
+                top_product_details = highlighted + rest
             
-            # The agent will handle updating the message history
             return {
                 "final_response": response,
                 "product_details": top_product_details,
                 "raw_recommendations": raw_recommendations,
-                "messages": [{"role": "assistant", "content": response}]
+                "messages": [{"role": "assistant", "content": response}],
+                "highlighted_indices": highlighted_indices,
             }
             
         except Exception as e:
@@ -231,7 +278,5 @@ Be brief and focused. Do not repeat full product details from the list."""
                 "raw_recommendations": state.get("raw_recommendations", [])
             }
 
-
-# Node instance
 generate_response_node = GenerateResponseNode()
 

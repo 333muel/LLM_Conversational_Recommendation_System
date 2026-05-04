@@ -1,5 +1,6 @@
 """Agent response handling."""
 import anyio
+import re
 import uuid
 import os
 from datetime import datetime
@@ -12,6 +13,27 @@ from apps.config.Tracing import get_logger
 from apps.config.Setting import settings
 
 logger = get_logger(__name__)
+
+
+def _strip_qa_word_count_suffix(text: str) -> str:
+    """Remove trailing word-count lines some models append (e.g. 'Word count: 42')."""
+    if not text or not text.strip():
+        return text
+    lines = text.rstrip().split("\n")
+    line_patterns = (
+        r"^(?:\*\*)?(?:word\s+count|total\s+words?|words?|characters?)(?:\*\*)?\s*[:：]?\s*\d+\s*$",
+        r"^\(\s*\d+\s*words?\s*\)\s*$",
+        r"^\[\s*\d+\s*words?\s*\]\s*$",
+        r"^\d+\s*words?\s*$",
+        r"^—\s*\d+\s*words?\s*$",
+    )
+    while lines:
+        last = lines[-1].strip()
+        if any(re.match(p, last, re.IGNORECASE) for p in line_patterns):
+            lines.pop()
+            continue
+        break
+    return "\n".join(lines).rstrip()
 
 
 class RecommendationAgent:
@@ -41,10 +63,8 @@ class RecommendationAgent:
             history = ConversationRepository.get_history(conversation_id)
             session_start_time = ConversationRepository.get_conversation_created_at(conversation_id) or datetime.utcnow()
             
-            # --- Cumulative constraints: load previous turn's active constraints ---
             previous_constraints = ConversationRepository.get_constraints(conversation_id)
 
-            # --- Regenerate: exclude previously recommended items ---
             _regenerate_keywords = ("regenerate", "different products", "something else", "more options", "other options", "show me different", "try again", "new recommendations", "different set", "new set", "give me a new", "replace the")
             _msg_lower = user_message.lower().strip()
             exclude_item_ids = None
@@ -53,8 +73,6 @@ class RecommendationAgent:
                 if exclude_item_ids:
                     logger.info(f"Regenerate detected, excluding {len(exclude_item_ids)} previously recommended items")
             
-            # --- Feedback Injection ---
-            # Get any pending thumbs up/down feedback from previous turns
             pending_feedback = ConversationRepository.get_pending_feedback(conversation_id)
             feedback_context = ""
             if pending_feedback:
@@ -64,7 +82,6 @@ class RecommendationAgent:
                     title = product.get("product_title", "Unknown") if product else item_id
                     feedback_items.append(f"- {title}: {info['type']}")
                 feedback_context = "\n[System Note: User feedback on previous recommendations:\n" + "\n".join(feedback_items) + "]"
-                # Clear feedback after retrieving it for this turn's context
                 ConversationRepository.clear_pending_feedback(conversation_id)
 
             _model = model or (settings.dashscope_model if llm_provider == "dashscope" else settings.ollama_model)
@@ -90,20 +107,16 @@ class RecommendationAgent:
             product_details = result.get("product_details", [])
             metadata = result.get("product_metadata", {})
             
-            # Update history and save
             updated_messages = result.get("messages", [])
             ConversationRepository.save_history(conversation_id, updated_messages)
-            # Store last recommended for regenerate logic
             if product_details:
                 ConversationRepository.save_last_recommended(conversation_id, [p.get("item_id") for p in product_details if p.get("item_id")])
-            # Persist merged constraints for the next turn
             merged_constraints = result.get("constraints") or {}
             if merged_constraints.get("clear_constraints"):
                 ConversationRepository.clear_constraints(conversation_id)
             elif merged_constraints:
                 ConversationRepository.save_constraints(conversation_id, merged_constraints)
             
-            # --- Non-blocking Post-processing (Logging & Profile) ---
             if background_tasks:
                 background_tasks.add_task(
                     self._post_process_interaction,
@@ -119,7 +132,6 @@ class RecommendationAgent:
                     llm_provider=llm_provider
                 )
             else:
-                # Fallback if no background tasks provided
                 await self._post_process_interaction(
                     user_id=user_id,
                     conversation_id=conversation_id,
@@ -165,8 +177,6 @@ class RecommendationAgent:
             history = ConversationRepository.get_history(conversation_id)
             session_start_time = ConversationRepository.get_conversation_created_at(conversation_id) or datetime.utcnow()
             
-            # --- Feedback Injection ---
-            # Get any pending thumbs up/down feedback from previous turns
             pending_feedback = ConversationRepository.get_pending_feedback(conversation_id)
             feedback_context = ""
             if pending_feedback:
@@ -176,7 +186,6 @@ class RecommendationAgent:
                     title = product.get("product_title", "Unknown") if product else item_id
                     feedback_items.append(f"- {title}: {info['type']}")
                 feedback_context = "\n[System Note: User feedback on previous recommendations:\n" + "\n".join(feedback_items) + "]"
-                # Clear feedback after retrieving it for this turn's context
                 ConversationRepository.clear_pending_feedback(conversation_id)
 
             _model = settings.dashscope_model if llm_provider == "dashscope" else settings.ollama_model
@@ -204,7 +213,6 @@ class RecommendationAgent:
             updated_messages = result.get("messages", [])
             ConversationRepository.save_history(conversation_id, updated_messages)
             
-            # --- Non-blocking Post-processing ---
             if background_tasks:
                 background_tasks.add_task(
                     self._post_process_interaction,
@@ -232,7 +240,7 @@ class RecommendationAgent:
                     constraints=result.get("constraints"),
                     llm_provider=llm_provider
                 )
-            
+
             return {
                 "response": final_response,
                 "conversation_id": conversation_id,
@@ -263,8 +271,6 @@ class RecommendationAgent:
             history = ConversationRepository.get_history(conversation_id)
             session_start_time = ConversationRepository.get_conversation_created_at(conversation_id) or datetime.utcnow()
             
-            # --- Feedback Injection ---
-            # Get any pending thumbs up/down feedback from previous turns
             pending_feedback = ConversationRepository.get_pending_feedback(conversation_id)
             feedback_context = ""
             if pending_feedback:
@@ -274,7 +280,6 @@ class RecommendationAgent:
                     title = product.get("product_title", "Unknown") if product else item_id
                     feedback_items.append(f"- {title}: {info['type']}")
                 feedback_context = "\n[System Note: User feedback on previous recommendations:\n" + "\n".join(feedback_items) + "]"
-                # Clear feedback after retrieving it for this turn's context
                 ConversationRepository.clear_pending_feedback(conversation_id)
 
             _model = model or (settings.dashscope_model if llm_provider == "dashscope" else settings.ollama_model)
@@ -303,7 +308,6 @@ class RecommendationAgent:
             updated_messages = result.get("messages", [])
             ConversationRepository.save_history(conversation_id, updated_messages)
             
-            # --- Non-blocking Post-processing ---
             if background_tasks:
                 background_tasks.add_task(
                     self._post_process_interaction,
@@ -344,10 +348,93 @@ class RecommendationAgent:
             logger.error(f"Baseline error: {e}")
             return {"response": f"Error: {e}", "conversation_id": conversation_id or str(uuid.uuid4()), "success": False}
 
+    async def process_qa(
+        self,
+        user_message: str,
+        conversation_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        llm_provider: Optional[str] = "ollama",
+        background_tasks: Any = None
+    ) -> Dict[str, Any]:
+        """Answer a user question about products without generating new recommendations."""
+        try:
+            from apps.core.llm import get_llm_client
+
+            user_id = user_id or "AFNT6ZJCYQN3WDIKUSWHJDXNND2Q"
+            conversation_id = conversation_id or str(uuid.uuid4())
+
+            history = ConversationRepository.get_history(conversation_id)
+
+            last_recommended_ids = ConversationRepository.get_last_recommended(conversation_id) or []
+            product_context = ""
+            if last_recommended_ids:
+                products = ProductRepository.get_products_by_ids(last_recommended_ids[:10])
+                for i, p in enumerate(products, 1):
+                    product_context += (
+                        f"\n{i}. {p.get('product_title', 'Unknown')}"
+                        f"\n   Description: {(p.get('product_description') or '')[:250]}"
+                        f"\n   Rating: {p.get('product_avg_rating', 'N/A')}/5.0"
+                    )
+                    price = (p.get("product_price") or "").strip()
+                    product_context += f"\n   Price: {price}" if price else ""
+                    product_context += "\n"
+
+            system_prompt = (
+                "You are a helpful beauty product expert and sales assistant. "
+                "The user is browsing products and has a question. Answer concisely "
+                "based on the product information provided, which should be your recommendations (keep answers brief). "
+                "If the question is about a specific product from the list, reference it by name. "
+                "If you don't have enough information to answer, say so honestly. "
+                "Do not append word counts, character counts, or any meta-summary after your answer."
+            )
+            if product_context:
+                system_prompt += f"\n\nCurrently displayed products:{product_context}"
+
+            chat_messages = [{"role": "system", "content": system_prompt}]
+            for msg in history:
+                if msg.get("role") != "system":
+                    chat_messages.append(msg)
+            chat_messages.append({"role": "user", "content": user_message})
+
+            _model = settings.dashscope_model if llm_provider == "dashscope" else settings.ollama_model
+            client = get_llm_client(provider=llm_provider, model=_model)
+            response_text = await client.chat(
+                messages=chat_messages,
+                enable_thinking=False,
+                stop=["User:", "Human:", "System:"]
+            )
+            response_text = _strip_qa_word_count_suffix(response_text)
+
+            updated_messages = history + [
+                {"role": "user", "content": user_message},
+                {"role": "assistant", "content": response_text},
+            ]
+            ConversationRepository.save_history(conversation_id, updated_messages)
+
+            return {
+                "response": response_text,
+                "conversation_id": conversation_id,
+                "recommendations": [],
+                "raw_recommendations": [],
+                "constraints": {},
+                "user_id": user_id,
+                "success": True,
+            }
+
+        except Exception as e:
+            logger.error(f"Q&A error: {e}")
+            return {
+                "response": f"Sorry, I encountered an error: {e}",
+                "conversation_id": conversation_id or str(uuid.uuid4()),
+                "recommendations": [],
+                "raw_recommendations": [],
+                "constraints": {},
+                "success": False,
+            }
+
     async def _post_process_interaction(self, user_id, conversation_id, user_message, final_response, product_details, metadata, session_start_time, turn_num, constraints, llm_provider="ollama"):
         """Asynchronous task to update user profile and log interaction."""
         try:
-            # 1. Update User Profile (AI Analysis)
             from apps.core.agent.workflow.nodes.UpdateUserProfile import update_user_profile_node
             mock_state = {
                 "user_id": user_id,
@@ -357,7 +444,6 @@ class RecommendationAgent:
             }
             await update_user_profile_node.execute(mock_state)
             
-            # 2. Log Interaction
             recommended_items = [{"item_id": p.get("item_id"), "price": p.get("price")} for p in product_details]
             fallback_triggered = metadata.get("source") in ["mixed_db_fallback", "recbole_default"] if metadata else False
             
@@ -410,27 +496,15 @@ class RecommendationAgent:
         import json
         
         try:
-            # 1. Get product details
             product = ProductRepository.get_product_by_id(item_id)
             if not product:
                 return {"explanation": "Product not found.", "product_id": item_id, "success": False}
                 
-            # 2. Get user profile context
             profile = UserProfileRepository.get_profile(user_id)
             profile_context = f"User preferences: {profile.get('preferences', {})}" if profile else "No profile data yet."
             
-            # 3. Create explanation prompt
-            prompt = f"""You are a beauty sales expert. Explain why the following product was recommended to the user.
+            system_prompt = """You are a beauty sales expert. Explain why the following product was recommended to the user.
             
-Product: {product.get('product_title')}
-Description: {product.get('product_description')}
-Rating: {product.get('product_avg_rating')}
-Price: {product.get('product_price')}
-Categories: {product.get('product_categories')}
-
-User Context: {profile_context}
-User Query: {user_query or "Why was this recommended?"}
-
 First, provide a warm, 2-3 sentence explanation of why this product fits the user.
 Second, provide attribute match scores on a scale of 0.0 to 1.0 for the following categories:
 - category_match
@@ -440,26 +514,67 @@ Second, provide attribute match scores on a scale of 0.0 to 1.0 for the followin
 
 Output format:
 Explanation text...
-JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "preference_alignment": 0.0}}
-"""
+JSON: {"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "preference_alignment": 0.0}"""
+
+            user_prompt = f"""Product: {product.get('product_title')}
+Description: {product.get('product_description')}
+Rating: {product.get('product_avg_rating')}
+Price: {product.get('product_price')}
+Categories: {product.get('product_categories')}
+
+User Context: {profile_context}
+User Query: {user_query or "Why was this recommended?"}"""
+
             client = get_llm_client(provider=llm_provider)
-            response = await client.generate(prompt=prompt)
-            
-            # Extract JSON for the "graph" (attribute scores)
-            explanation_text = response.split("JSON:")[0].strip()
+            response = await client.chat(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                stop=["User:", "Human:", "System:"]
+            )
+
             attribute_scores = {"category_match": 0.8, "price_relevance": 0.7, "quality_rating": 0.9, "preference_alignment": 0.8}
-            
-            try:
-                if "JSON:" in response:
-                    json_str = response.split("JSON:")[1].strip()
-                    attribute_scores = json.loads(json_str)
-            except Exception as e:
-                logger.error(f"Error parsing attribute scores from LLM: {e}")
+            explanation_text = response
+
+            # Try multiple strategies to extract the JSON scores object
+            json_obj = None
+            # 1) Explicit "JSON:" separator
+            if "JSON:" in response:
+                try:
+                    json_obj = json.loads(response.split("JSON:")[1].strip())
+                    explanation_text = response.split("JSON:")[0].strip()
+                except Exception:
+                    pass
+            # 2) Fenced code block  ```json ... ```  or  ``` ... ```
+            if json_obj is None:
+                code_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", response, re.DOTALL)
+                if code_match:
+                    try:
+                        json_obj = json.loads(code_match.group(1))
+                        explanation_text = response[:code_match.start()].strip()
+                    except Exception:
+                        pass
+            # 3) Bare JSON object anywhere in the text
+            if json_obj is None:
+                bare_match = re.search(r'(\{[^{}]*"category_match"[^{}]*\})', response, re.DOTALL)
+                if bare_match:
+                    try:
+                        json_obj = json.loads(bare_match.group(1))
+                        explanation_text = response[:bare_match.start()].strip()
+                    except Exception:
+                        pass
+
+            if json_obj and isinstance(json_obj, dict):
+                attribute_scores = json_obj
+
+            # Clean up any leftover artifacts from the explanation text
+            explanation_text = re.sub(r"\s*(?:JSON|Scores?)\s*:\s*$", "", explanation_text, flags=re.IGNORECASE).strip()
 
             return {
                 "explanation": explanation_text,
                 "product_id": item_id,
-                "attribute_scores": attribute_scores, # Frontend will use this for the "simple graph"
+                "attribute_scores": attribute_scores,
                 "success": True
             }
         except Exception as e:
@@ -500,14 +615,12 @@ JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "p
         from apps.core.agent.workflow.tools.RecBoleModel import get_recbole_engine
         
         try:
-            # Get candidates (Top 100) - Run in thread to avoid blocking loop
             engine = get_recbole_engine(algorithm=algorithm)
             candidates = await anyio.to_thread.run_sync(
                 engine.recommend, user_id, 100
             )
             candidate_asins = [c["item_id"] for c in candidates]
             
-            # Filter - MongoDB calls are sync, run in thread too
             def _filter():
                 return ProductRepository.filter_products(
                     candidate_asins,
@@ -519,7 +632,6 @@ JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "p
                 )
             matching_products = await anyio.to_thread.run_sync(_filter)
             
-            # Fallback logic
             final_products = matching_products[:limit]
             metadata = {"matched_count": len(matching_products), "source": "recbole_filtered"}
             
@@ -551,12 +663,20 @@ JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "p
                     if len(final_products) >= limit:
                         break
             
-            # Format
             formatted = []
+            seen_titles: set = set()
             for p in final_products:
+                raw_title: str = p.get("product_title", "Unknown")
+                normalised_title = " ".join(raw_title.lower().split())
+                if normalised_title in seen_titles:
+                    logger.debug(
+                        f"filter_candidates: skipping duplicate title for {p.get('asin')}: '{raw_title}'"
+                    )
+                    continue
+                seen_titles.add(normalised_title)
                 formatted.append({
                     "item_id": p.get("asin"),
-                    "title": p.get("product_title", "Unknown"),
+                    "title": raw_title,
                     "description": p.get("product_description", ""),
                     "rating": p.get("product_avg_rating"),
                     "price": p.get("product_price", ""),
@@ -608,11 +728,9 @@ JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "p
             result = await generate_response_node.execute(state)
             final_response = result.get("final_response", "Done.")
             
-            # Update history
             updated_messages = state["messages"] + [{"role": "assistant", "content": final_response}]
             ConversationRepository.save_history(conversation_id, updated_messages)
             
-            # --- Non-blocking Post-processing ---
             if background_tasks:
                 background_tasks.add_task(
                     self._post_process_interaction,
@@ -641,12 +759,17 @@ JSON: {{"category_match": 0.0, "price_relevance": 0.0, "quality_rating": 0.0, "p
                     llm_provider=llm_provider
                 )
             
-            return {"response": final_response, "conversation_id": conversation_id, "success": True}
+            highlighted_indices = result.get("highlighted_indices") or []
+            return {
+                "response": final_response,
+                "conversation_id": conversation_id,
+                "success": True,
+                "highlighted_indices": highlighted_indices,
+            }
         except Exception as e:
             logger.error(f"Respond error: {e}")
             return {"response": f"Error: {e}", "conversation_id": conversation_id, "success": False}
 
-# Global agent instance
 recommendation_agent = RecommendationAgent()
 
 def get_recommendation_agent() -> RecommendationAgent:

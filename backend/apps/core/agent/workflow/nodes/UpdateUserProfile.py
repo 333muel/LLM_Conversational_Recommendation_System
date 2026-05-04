@@ -23,9 +23,6 @@ Output ONLY a valid JSON object with the following keys:
 - "product_features": (list of strings) Desired features (e.g., "organic", "fragrance-free", "long-lasting").
 - "last_intent": (string) Short summary of the last user intent.
 
-Current Preferences: {current_preferences}
-User Message: "{user_message}"
-
 If a preference is not explicitly mentioned or cannot be inferred, keep the existing value from the current preferences.
 Return ONLY the JSON object. Do not include any other text."""
 
@@ -42,16 +39,10 @@ Return ONLY the JSON object. Do not include any other text."""
             if not user_message:
                 return {}
 
-            # 1. Get existing profile
             profile = UserProfileRepository.get_profile(user_id)
             current_preferences = profile.get("preferences", {}) if profile else {}
             
-            # 2. Analyze using LLM (fast utility model — no CoT needed for JSON extraction)
             logger.info(f"Analyzing user preferences for user_id: {user_id} using {llm_provider}")
-            analysis_prompt = self.SYSTEM_PROMPT.format(
-                current_preferences=json.dumps(current_preferences),
-                user_message=user_message
-            )
             
             from apps.core.llm import get_llm_client
             from apps.config.Setting import settings
@@ -60,10 +51,21 @@ Return ONLY the JSON object. Do not include any other text."""
             )
             client = get_llm_client(provider=llm_provider, model=fast_model)
             
-            response = await client.generate(
-                prompt=analysis_prompt,
-                system_prompt="You are a helpful user profile analyst. Return ONLY JSON.",
-                enable_thinking=False
+            messages = [
+                {
+                    "role": "system", 
+                    "content": f"{self.SYSTEM_PROMPT}\n\nCurrent Preferences: {json.dumps(current_preferences)}"
+                },
+                {
+                    "role": "user", 
+                    "content": f"User Message: \"{user_message}\""
+                }
+            ]
+            
+            response = await client.chat(
+                messages=messages,
+                enable_thinking=False,
+                stop=["User:", "Human:", "System:"]
             )
             
             # Clean and parse JSON
@@ -77,14 +79,13 @@ Return ONLY the JSON object. Do not include any other text."""
                 updated_preferences = json.loads(cleaned_response)
                 logger.info(f"Extracted updated preferences for {user_id}: {updated_preferences}")
                 
-                # 3. Save to MongoDB
                 UserProfileRepository.update_preferences(user_id, updated_preferences)
                 logger.info(f"User profile updated for {user_id}")
                 
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse preferences JSON: {e}. Response: {cleaned_response}")
             
-            return {} # This node just performs a side effect
+            return {}
             
         except Exception as e:
             logger.error(f"Error in UpdateUserProfileNode: {e}")
@@ -92,5 +93,4 @@ Return ONLY the JSON object. Do not include any other text."""
             logger.error(traceback.format_exc())
             return {}
 
-# Node instance
 update_user_profile_node = UpdateUserProfileNode()

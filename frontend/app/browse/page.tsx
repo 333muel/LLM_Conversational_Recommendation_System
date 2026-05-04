@@ -13,6 +13,14 @@ import { Badge } from "@/components/ui/badge";
 import { fetchProducts, extractConstraints, filterProducts, respondToProducts } from "@/lib/api";
 import { Product, Recommendation } from "@/lib/types";
 
+function reorderByHighlighted(products: Product[], indices: number[]): Product[] {
+  if (!indices || indices.length === 0 || products.length === 0) return products;
+  const idxSet = new Set(indices.map((i) => i - 1));
+  const highlighted = products.filter((_, i) => idxSet.has(i));
+  const rest = products.filter((_, i) => !idxSet.has(i));
+  return [...highlighted, ...rest];
+}
+
 const QUICK_CHIPS = [
   { text: "Cheaper options please", label: "Cheaper" },
   { text: "Show fragrance-free options", label: "Fragrance-free" },
@@ -42,7 +50,6 @@ function BrowseContent() {
       return;
     }
 
-    // Load initial recommendations or handle search from query param
     loadDiscovery(query || undefined);
   }, [isAuthenticated, router, query]);
 
@@ -56,10 +63,8 @@ function BrowseContent() {
 
       const userMessage = query || "Show me some recommendations";
       const isGeneric = !userMessage || ["show me some recommendations", "recommend some products", "browse"].includes(userMessage.toLowerCase().trim() || userMessage.toLowerCase());
-
-      // Define a function to trigger filtering and response once we have constraints
+      
       const runFilterAndRespond = (extractedConstraints: any) => {
-        // Filter call - request 25 for buffer (20 displayed + 5 buffer)
         filterProducts({
           constraints: extractedConstraints,
           user_id: userId,
@@ -70,7 +75,6 @@ function BrowseContent() {
             setProductState({ display: allFormatted.slice(0, 20), buffer: allFormatted.slice(20, 25) });
             setDislikedIds(new Set());
             
-            // Generate response once products are ready (use first 20 for response text)
             respondToProducts({
               message: userMessage,
               conversation_id: currentConvId,
@@ -82,14 +86,19 @@ function BrowseContent() {
               if (respondRes.success) {
                 setAssistantResponse(respondRes.response);
                 if (respondRes.conversation_id) setConversationId(respondRes.conversation_id);
+                if (respondRes.highlighted_indices && respondRes.highlighted_indices.length > 0) {
+                  setProductState(prev => ({
+                    ...prev,
+                    display: reorderByHighlighted(prev.display, respondRes.highlighted_indices!),
+                  }));
+                }
               }
             });
           }
         });
       };
-
+      
       if (!isGeneric) {
-        // Trigger extraction but don't AWAIT it here for the whole function
         extractConstraints({ message: userMessage, user_id: userId, llm_provider: llmProvider })
           .then(extractRes => {
             setConstraints(extractRes.constraints);
@@ -142,7 +151,6 @@ function BrowseContent() {
         newDisplay[dislikedIndex] = replacement;
         return { display: newDisplay, buffer: restBuffer };
       }
-      // Buffer empty - refill in background, then replace in place
       const idxToReplace = dislikedIndex;
       filterProducts({
         constraints,
@@ -165,7 +173,6 @@ function BrowseContent() {
           }
         })
         .catch(console.error);
-      // Temporarily remove until replacement arrives
       const filtered = prev.display.filter((p) => p.asin !== productId);
       return { display: filtered, buffer: prev.buffer };
     });
@@ -186,7 +193,6 @@ function BrowseContent() {
   };
 
   const handleConstraintsUpdate = (newConstraints: Record<string, any>) => {
-    // Keep badge display and dislike-refill calls in sync with the chat's active filters
     if (newConstraints.clear_constraints) {
       setConstraints({});
     } else {

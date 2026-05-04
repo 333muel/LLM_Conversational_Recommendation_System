@@ -17,12 +17,24 @@ class OllamaClient:
     async def generate(self, prompt: str, system_prompt: Optional[str] = None, **kwargs) -> str:
         """Generate text using Ollama (Async)."""
         try:
+            # Separate Ollama 'options' from top-level parameters
+            options = {}
+            if "stop" in kwargs:
+                options["stop"] = kwargs.pop("stop")
+            if "temperature" in kwargs:
+                options["temperature"] = kwargs.pop("temperature")
+            if "top_p" in kwargs:
+                options["top_p"] = kwargs.pop("top_p")
+            
             payload = {
                 "model": self.model,
                 "prompt": prompt,
                 "stream": False,
                 **kwargs
             }
+            
+            if options:
+                payload["options"] = options
             
             if system_prompt:
                 payload["system"] = system_prompt
@@ -43,12 +55,24 @@ class OllamaClient:
     async def chat(self, messages: List[Dict[str, str]], **kwargs) -> str:
         """Chat with Ollama using message format (Async)."""
         try:
+            # Separate Ollama 'options' from top-level parameters
+            options = {}
+            if "stop" in kwargs:
+                options["stop"] = kwargs.pop("stop")
+            if "temperature" in kwargs:
+                options["temperature"] = kwargs.pop("temperature")
+            if "top_p" in kwargs:
+                options["top_p"] = kwargs.pop("top_p")
+
             payload = {
                 "model": self.model,
                 "messages": messages,
                 "stream": False,
                 **kwargs
             }
+
+            if options:
+                payload["options"] = options
             
             async with httpx.AsyncClient(timeout=120.0) as client:
                 response = await client.post(

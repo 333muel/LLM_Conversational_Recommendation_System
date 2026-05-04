@@ -81,12 +81,3 @@ docker-compose logs -f backend
 ```bash
 docker-compose down -v
 ```
-
-## Performance Results
-
-The system supports multiple recommendation algorithms. Comprehensive performance comparisons can be found in `docs/performance.txt`.
-
-Top Performers (Recall@10):
-1. **SGL** (2021) - Test Recall: 0.0322
-2. **LightGCN** (2020) - Test Recall: 0.0303
-3. **DMF** (2017) - Test Recall: 0.0252

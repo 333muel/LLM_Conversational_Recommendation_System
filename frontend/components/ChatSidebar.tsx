@@ -11,6 +11,8 @@ import { fetchRecommendations } from "@/lib/api";
 import { ChatMessage, Recommendation } from "@/lib/types";
 import Link from "next/link";
 
+type ChatMode = "recommend" | "qa";
+
 interface ChatSidebarProps {
   initialMessage?: string;
   quickChips?: Array<{ text: string; label: string }>;
@@ -36,9 +38,10 @@ export function ChatSidebar({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
+  const [chatMode, setChatMode] = useState<ChatMode>("recommend");
   const { userId } = useUser();
   const { llmProvider } = useChat();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (initialConversationId) {
@@ -59,12 +62,9 @@ export function ChatSidebar({
     }
   }, [initialMessage]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
   useEffect(() => {
-    scrollToBottom();
+    const el = scrollContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   const handleSend = async (text?: string) => {
@@ -89,18 +89,20 @@ export function ChatSidebar({
         user_id: userId,
         top_k: topK,
         llm_provider: llmProvider,
+        mode: chatMode,
       });
 
       if (response.conversation_id) {
         setConversationId(response.conversation_id);
       }
 
-      if (response.recommendations && onRecommendationsUpdate) {
-        onRecommendationsUpdate(response.recommendations);
-      }
-
-      if (response.constraints && onConstraintsUpdate) {
-        onConstraintsUpdate(response.constraints);
+      if (chatMode === "recommend") {
+        if (response.recommendations && onRecommendationsUpdate) {
+          onRecommendationsUpdate(response.recommendations);
+        }
+        if (response.constraints && onConstraintsUpdate) {
+          onConstraintsUpdate(response.constraints);
+        }
       }
 
       const assistantMessage: ChatMessage = {
@@ -163,7 +165,7 @@ export function ChatSidebar({
       </div>
 
       <div className="border border-[rgba(228,234,242,.9)] bg-white/98 rounded-[var(--radius)] overflow-hidden flex flex-col h-[560px] max-[980px]:h-[420px]">
-        <div className="p-3 overflow-auto flex-1 flex flex-col gap-2.5" ref={messagesEndRef}>
+        <div className="p-3 overflow-auto flex-1 flex flex-col gap-2.5" ref={scrollContainerRef}>
           {messages.length === 0 && (
             <div className="text-center text-[var(--muted-foreground)] py-8">
               <p className="text-[13px]">Start a conversation to get product recommendations!</p>
@@ -249,22 +251,49 @@ export function ChatSidebar({
           </div>
         )}
 
-        <div className="flex gap-2.5 px-3 py-2.5 pb-3 border-t border-[rgba(228,234,242,.9)] bg-white/98">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyPress}
-            placeholder="Type a refinement request…"
-            className="flex-1 border border-[rgba(228,234,242,.95)] outline-none text-[13.5px] px-3 py-2.5 rounded-[14px] bg-[rgba(241,245,249,.55)] text-[var(--text)] focus:bg-white/98 focus:border-[rgba(167,139,250,.35)] focus:shadow-[0_0_0_4px_rgba(167,139,250,.10)]"
-            disabled={isLoading}
-          />
-          <Button
-            onClick={() => handleSend()}
-            disabled={isLoading || !input.trim()}
-            className="bg-[rgba(167,139,250,.14)] border border-[rgba(167,139,250,.35)] rounded-[14px] px-3 py-2.5 cursor-pointer font-extrabold text-[13px] transition-colors whitespace-nowrap select-none hover:bg-[rgba(167,139,250,.20)]"
-          >
-            Send
-          </Button>
+        <div className="px-3 py-2 border-t border-[rgba(228,234,242,.9)] bg-white/98">
+          <div className="flex items-center gap-1.5 mb-2">
+            <button
+              onClick={() => setChatMode("recommend")}
+              className={`px-2.5 py-1 rounded-full text-[11.5px] font-semibold border transition-colors select-none ${
+                chatMode === "recommend"
+                  ? "bg-[rgba(45,212,191,.14)] border-[rgba(45,212,191,.35)] text-[rgba(20,184,166,1)]"
+                  : "bg-transparent border-[var(--line)] text-[var(--muted-foreground)] hover:bg-[var(--btnHover)]"
+              }`}
+            >
+              Recommend
+            </button>
+            <button
+              onClick={() => setChatMode("qa")}
+              className={`px-2.5 py-1 rounded-full text-[11.5px] font-semibold border transition-colors select-none ${
+                chatMode === "qa"
+                  ? "bg-[rgba(167,139,250,.14)] border-[rgba(167,139,250,.35)] text-[rgba(139,92,246,1)]"
+                  : "bg-transparent border-[var(--line)] text-[var(--muted-foreground)] hover:bg-[var(--btnHover)]"
+              }`}
+            >
+              Q&A
+            </button>
+            <span className="text-[10.5px] text-[var(--muted-foreground)] ml-1">
+              {chatMode === "recommend" ? "Refine recommendations" : "Ask about products"}
+            </span>
+          </div>
+          <div className="flex gap-2.5">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyPress}
+              placeholder={chatMode === "recommend" ? "Type a refinement request…" : "Ask a question about the products…"}
+              className="flex-1 border border-[rgba(228,234,242,.95)] outline-none text-[13.5px] px-3 py-2.5 rounded-[14px] bg-[rgba(241,245,249,.55)] text-[var(--text)] focus:bg-white/98 focus:border-[rgba(167,139,250,.35)] focus:shadow-[0_0_0_4px_rgba(167,139,250,.10)]"
+              disabled={isLoading}
+            />
+            <Button
+              onClick={() => handleSend()}
+              disabled={isLoading || !input.trim()}
+              className="bg-[rgba(167,139,250,.14)] border border-[rgba(167,139,250,.35)] rounded-[14px] px-3 py-2.5 cursor-pointer font-extrabold text-[13px] transition-colors whitespace-nowrap select-none hover:bg-[rgba(167,139,250,.20)]"
+            >
+              Send
+            </Button>
+          </div>
         </div>
       </div>
     </div>

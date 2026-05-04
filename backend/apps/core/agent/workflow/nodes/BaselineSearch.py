@@ -20,26 +20,18 @@ class BaselineSearchNode(BaseNode):
             user_message = state.get("user_message", "")
             llm_provider = state.get("llm_provider", self._provider)
             
-            # 1. AI Query Processing to get constraints
             processor = QueryProcessor(provider=llm_provider)
             constraints = await processor.process(user_message)
             
-            # 2. Search MongoDB directly (no RecBole candidate set)
-            # Use filter_products but with an empty product_ids list to search entire DB
-            # We'll use a larger limit for the baseline search
             limit = 20
             
-            # If no constraints, just get top rated products
             if not constraints or not any(constraints.values()):
                 logger.info("No constraints found for baseline search, fetching top rated.")
                 products = ProductRepository.get_top_rated_by_category("beauty", limit=limit)
             else:
                 logger.info(f"Baseline search with constraints: {constraints}")
-                # Use category search as base if available
                 category = constraints.get("category", "beauty")
                 
-                # We'll use filter_products with product_ids=None to indicate full DB search
-                # Need to update filter_products to handle product_ids=None
                 products = ProductRepository.filter_products(
                     product_ids=None,
                     category=category,
@@ -48,7 +40,6 @@ class BaselineSearchNode(BaseNode):
                     keywords=constraints.get("keywords")
                 )
                 
-                # If still too few, supplement with category top rated
                 if len(products) < 5:
                     fallback = ProductRepository.get_top_rated_by_category(category, limit=limit)
                     existing_asins = {p["asin"] for p in products}
@@ -58,12 +49,20 @@ class BaselineSearchNode(BaseNode):
                         if len(products) >= limit:
                             break
 
-            # 3. Format results
             formatted_products = []
+            seen_titles: set = set()
             for p in products[:limit]:
+                raw_title: str = p.get("product_title", "Unknown")
+                normalised_title = " ".join(raw_title.lower().split())
+                if normalised_title in seen_titles:
+                    logger.debug(
+                        f"Skipping duplicate title for item {p.get('asin')}: '{raw_title}'"
+                    )
+                    continue
+                seen_titles.add(normalised_title)
                 formatted_products.append({
                     "item_id": p.get("asin"),
-                    "title": p.get("product_title", "Unknown"),
+                    "title": raw_title,
                     "description": p.get("product_description", ""),
                     "rating": p.get("product_avg_rating"),
                     "price": p.get("product_price", ""),
@@ -78,7 +77,7 @@ class BaselineSearchNode(BaseNode):
                 "product_details": formatted_products,
                 "constraints": constraints,
                 "product_metadata": {"source": "baseline_mongodb"},
-                "raw_recommendations": [] # No RecBole here
+                "raw_recommendations": []
             }
             
         except Exception as e:

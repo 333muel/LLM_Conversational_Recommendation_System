@@ -61,6 +61,34 @@ class RecommendItemNode(BaseNode):
                     filtered.append(rec_map[asin])
                 else:
                     filtered.append({"item_id": asin, "score": 0.0, "rank": len(filtered) + 1})
+
+            # If RecBole candidates alone are below the limit, supplement from the
+            # full DB so that later title-deduplication never leaves us short of top_k.
+            if len(filtered) < limit and (
+                constraints.get("keywords") or constraints.get("category")
+                or constraints.get("max_price") is not None
+                or constraints.get("min_rating") is not None
+            ):
+                logger.info(
+                    f"RecBole filtered {len(filtered)} < limit {limit}; "
+                    "supplementing from full DB."
+                )
+                existing_asins = {r["item_id"] for r in filtered}
+                db_supplement = ProductRepository.filter_products(
+                    product_ids=None,
+                    category=constraints.get("category"),
+                    max_price=constraints.get("max_price"),
+                    min_rating=constraints.get("min_rating"),
+                    keywords=constraints.get("keywords"),
+                )
+                for p in db_supplement:
+                    asin = p.get("asin")
+                    if asin and asin not in existing_asins:
+                        filtered.append({"item_id": asin, "score": 0.0, "rank": len(filtered) + 1})
+                        existing_asins.add(asin)
+                    if len(filtered) >= limit:
+                        break
+
             return filtered[:limit]
 
         # Fallback: search entire DB when few matches in RecBole candidates
@@ -185,6 +213,5 @@ class RecommendItemNode(BaseNode):
             }
 
 
-# Node instance
 recommend_item_node = RecommendItemNode()
 

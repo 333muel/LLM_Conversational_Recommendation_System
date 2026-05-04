@@ -91,29 +91,30 @@ Return ONLY the JSON object. Do not include any other text."""
             logger.info(f"Processing query for constraints: {user_message} using {self._provider}")
             from apps.core.llm import get_llm_client
             from apps.config.Setting import settings
-
-            # Use the dedicated fast model for this utility task
+            
             fast_model = (
                 self._model
                 or (settings.dashscope_fast_model if self._provider == "dashscope" else None)
             )
             client = get_llm_client(provider=self._provider, model=fast_model)
             
-            response = await client.generate(
-                prompt=f"User request: \"{user_message}\"",
-                system_prompt=self.SYSTEM_PROMPT,
-                # Disable chain-of-thought on thinking models — not needed for JSON extraction
-                enable_thinking=False
+            messages = [
+                {"role": "system", "content": self.SYSTEM_PROMPT},
+                {"role": "user", "content": f"User request: \"{user_message}\""}
+            ]
+            
+            response = await client.chat(
+                messages=messages,
+                enable_thinking=False,
+                stop=["User:", "Human:", "System:"]
             )
             
-            # Clean response to ensure it's just JSON
             cleaned_response = response.strip()
             if "```json" in cleaned_response:
                 cleaned_response = cleaned_response.split("```json")[1].split("```")[0].strip()
             elif "```" in cleaned_response:
                 cleaned_response = cleaned_response.split("```")[1].split("```")[0].strip()
             
-            # Parse JSON
             constraints = json.loads(cleaned_response)
             constraints = self._normalize_constraints(user_message, constraints)
             logger.info(f"Extracted constraints: {constraints}")
@@ -121,5 +122,4 @@ Return ONLY the JSON object. Do not include any other text."""
             
         except Exception as e:
             logger.error(f"Error processing query with LLM: {e}")
-            # Return empty constraints on error
             return {"intent": "general discovery"}

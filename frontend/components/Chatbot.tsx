@@ -32,18 +32,14 @@ export function Chatbot() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
+  const [chatMode, setChatMode] = useState<"recommend" | "qa">("recommend");
   const { userId } = useUser();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Handle initial message from context
   useEffect(() => {
     if (initialMessage && isOpen) {
       setInput(initialMessage);
       setInitialMessage(null);
-      // We don't auto-send because the user might want to edit it
-      // or we can auto-send if that's preferred.
-      // Given the user query "linked to this chat dialogue", 
-      // let's auto-send if it's coming from the search bar.
       handleSend(initialMessage);
     }
   }, [initialMessage, isOpen]);
@@ -73,7 +69,16 @@ export function Chatbot() {
 
     try {
       let response;
-      if (agentType === "baseline") {
+      if (chatMode === "qa") {
+        response = await fetchRecommendations({
+          message: messageText,
+          conversation_id: conversationId,
+          user_id: userId,
+          top_k: 5,
+          llm_provider: llmProvider,
+          mode: "qa",
+        });
+      } else if (agentType === "baseline") {
         const baselineResult = await fetchBaselineRecommendations({
           message: messageText,
           conversation_id: conversationId,
@@ -93,6 +98,7 @@ export function Chatbot() {
           user_id: userId,
           top_k: 5,
           llm_provider: llmProvider,
+          mode: "recommend",
         });
       }
 
@@ -136,26 +142,14 @@ export function Chatbot() {
 
   return (
     <>
-      {/* Assistant A Button (teal) */}
+      {/* Chat launcher (floating) */}
       <button
         onClick={() => {
           setAgentType("recbole");
           setIsOpen(true);
         }}
         className="fixed right-[18px] bottom-[18px] z-50 w-14 h-14 rounded-[18px] border border-[rgba(45,212,191,.45)] bg-[rgba(45,212,191,.22)] shadow-[var(--shadow2)] cursor-pointer flex items-center justify-center transition-all duration-150 hover:-translate-y-0.5 hover:bg-[rgba(45,212,191,.28)]"
-        aria-label="Open Assistant B"
-      >
-        <span className="text-xl">💬</span>
-      </button>
-
-      {/* Assistant B Button (purple) */}
-      <button
-        onClick={() => {
-          setAgentType("baseline");
-          setIsOpen(true);
-        }}
-        className="fixed right-[82px] bottom-[18px] z-50 w-14 h-14 rounded-[18px] border border-[rgba(167,139,250,.45)] bg-[rgba(167,139,250,.22)] shadow-[var(--shadow2)] cursor-pointer flex items-center justify-center transition-all duration-150 hover:-translate-y-0.5 hover:bg-[rgba(167,139,250,.28)]"
-        aria-label="Open Assistant A"
+        aria-label="Open recommendation assistant"
       >
         <span className="text-xl">💬</span>
       </button>
@@ -258,12 +252,37 @@ export function Chatbot() {
           </div>
 
           <div className="border-t border-[rgba(228,234,242,.9)] p-3 pb-3 bg-white/98">
+            <div className="flex items-center gap-1.5 mb-2">
+              <button
+                onClick={() => setChatMode("recommend")}
+                className={`px-2.5 py-1 rounded-full text-[11.5px] font-semibold border transition-colors select-none ${
+                  chatMode === "recommend"
+                    ? "bg-[rgba(45,212,191,.14)] border-[rgba(45,212,191,.35)] text-[rgba(20,184,166,1)]"
+                    : "bg-transparent border-[var(--line)] text-[var(--muted-foreground)] hover:bg-[var(--btnHover)]"
+                }`}
+              >
+                Recommend
+              </button>
+              <button
+                onClick={() => setChatMode("qa")}
+                className={`px-2.5 py-1 rounded-full text-[11.5px] font-semibold border transition-colors select-none ${
+                  chatMode === "qa"
+                    ? "bg-[rgba(167,139,250,.14)] border-[rgba(167,139,250,.35)] text-[rgba(139,92,246,1)]"
+                    : "bg-transparent border-[var(--line)] text-[var(--muted-foreground)] hover:bg-[var(--btnHover)]"
+                }`}
+              >
+                Q&A
+              </button>
+              <span className="text-[10.5px] text-[var(--muted-foreground)] ml-1">
+                {chatMode === "recommend" ? "Get recommendations" : "Ask about products"}
+              </span>
+            </div>
             <div className="flex gap-2.5">
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyPress}
-                placeholder="Ask about products…"
+                placeholder={chatMode === "recommend" ? "Ask about products…" : "Ask a question about the products…"}
                 disabled={isLoading}
                 className="flex-1 border border-[rgba(228,234,242,.95)] outline-none text-[13.5px] px-3 py-2.5 rounded-[14px] bg-[rgba(241,245,249,.55)] text-[var(--text)] focus:bg-white/98 focus:border-[rgba(167,139,250,.35)] focus:shadow-[0_0_0_4px_rgba(167,139,250,.10)] placeholder:text-[rgba(91,103,119,.75)]"
               />
